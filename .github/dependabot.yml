@@ -1,0 +1,73 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/client"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Rome"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "client"
+    commit-message:
+      prefix: "deps(client)"
+      include: "scope"
+    groups:
+      client-prod:
+        dependency-type: "production"
+        patterns:
+          - "*"
+      client-dev:
+        dependency-type: "development"
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Rome"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "server"
+    commit-message:
+      prefix: "deps(server)"
+      include: "scope"
+    groups:
+      server-prod:
+        dependency-type: "production"
+        patterns:
+          - "*"
+      server-dev:
+        dependency-type: "development"
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/dvm"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Rome"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "dvm"
+    commit-message:
+      prefix: "deps(dvm)"
+      include: "scope"
+    groups:
+      dvm-prod:
+        dependency-type: "production"
+        patterns:
+          - "*"
+      dvm-dev:
+        dependency-type: "development"
+        patterns:
+          - "*"
