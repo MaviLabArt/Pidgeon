@@ -8,7 +8,9 @@
   Nostr scheduler client + DVM-powered job ledger.
 </p>
 
-Pidgeon is a Nostr scheduler client + a companion DVM that publishes an encrypted, authoritative job ledger state (kind `30078`) per user.
+Pidgeon is a privacy first Nostr scheduler client that comes with a companion DVM.
+
+The official instance runs at `https://pidgeon.lol` and is accessible to all Nostr users.
 
 ## Repo layout
 - `client/`: Vite/React UI
