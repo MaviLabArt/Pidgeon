@@ -10,7 +10,7 @@
 
 Pidgeon is a privacy first Nostr scheduler client that comes with a companion DVM.
 
-The official instance runs at `https://pidgeon.lol` and is accessible to all Nostr users.
+The official instance runs at https://pidgeon.lol and is accessible to all Nostr users.
 
 ## Repo layout
 - `client/`: Vite/React UI
