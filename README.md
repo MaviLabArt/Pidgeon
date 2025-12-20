@@ -18,6 +18,12 @@ Pidgeon is a Nostr scheduler client + a companion DVM that publishes an encrypte
 ## Docs
 - `docs.md`: Scheduler + job ledger architecture and protocol
 
+## Privacy: self-host your DVM
+You can optionally self-host your own DVM and point Pidgeon to it for additional privacy.
+
+- Self-host the DVM (see `dvm/README.md`).
+- In the app, go to `Settings → Advanced` and set the DVM pubkey.
+
 ## Local dev
 1) Start the DVM (see `dvm/README.md`)
 2) Start the client:
