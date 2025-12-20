@@ -1,0 +1,22 @@
+{
+  "name": "pidgeon-dvm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node src/index.js",
+    "start": "node src/index.js",
+    "seed:loadtest": "node scripts/seed-mailbox-loadtest.mjs"
+  },
+  "dependencies": {
+    "@noble/secp256k1": "^3.0.0",
+    "@welshman/lib": "^0.5.1",
+    "@welshman/net": "^0.5.1",
+    "@welshman/signer": "^0.5.1",
+    "@welshman/util": "^0.5.1",
+    "better-sqlite3": "^9.4.3",
+    "dotenv": "^17.2.3",
+    "nostr-tools": "^2.19.2"
+  }
+}
+
