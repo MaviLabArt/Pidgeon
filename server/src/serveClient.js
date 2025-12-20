@@ -22,7 +22,9 @@ export function mountClient(app) {
     })
   );
   // SPA fallback to index.html
-  app.get("*", (req, res) => {
+  // Express 5 + path-to-regexp v6 doesn't accept "*" as a path string.
+  // Also avoid swallowing unknown /api routes: let them 404 instead of serving the SPA.
+  app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
     res.sendFile(path.join(clientDist, "index.html"));
   });
 }

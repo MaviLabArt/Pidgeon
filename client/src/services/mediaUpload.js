@@ -1,7 +1,7 @@
 import { absoluteApiUrl } from "./api.js";
 import { resolveServiceUrl, signNip98Auth } from "./nip98.js";
-import { sha256 } from "@noble/hashes/sha256";
-import { bytesToHex } from "@noble/hashes/utils";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 
 export const UPLOAD_ABORTED_ERROR_MSG = "Upload aborted";
 const imetaByUrl = new Map();

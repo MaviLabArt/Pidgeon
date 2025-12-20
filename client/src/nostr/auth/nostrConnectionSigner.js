@@ -1,4 +1,4 @@
-import { bytesToHex } from "@noble/hashes/utils";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { BunkerSigner as NBunkerSigner, toBunkerURL } from "nostr-tools/nip46";
 import { REQUIRED_NIP46_PERMS_CSV } from "./nip46Perms.js";
 import { attachNip46Debug } from "./nip46Debug.js";

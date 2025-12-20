@@ -3,8 +3,8 @@ import { resolveRelays } from "@/nostr/config.js";
 import { fetchEventsOnce, subscribeEvents } from "@/nostr/pool.js";
 import { b64uToBytesSafe, nip44DecryptWithKey } from "@/nostr/crypto.js";
 import { isDemoMailboxEnabled, subscribeDemoMailbox } from "@/services/demoMailbox.js";
-import { sha256 } from "@noble/hashes/sha256";
-import { bytesToHex } from "@noble/hashes/utils";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 
 const MAILBOX_KIND = 30078;
 const CACHE_PREFIX = "pidgeon.mailbox.";

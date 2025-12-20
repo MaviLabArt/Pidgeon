@@ -2,9 +2,9 @@ import { finalizeEvent, generateSecretKey, getEventHash, getPublicKey, nip19, ni
 import { publishEvents } from "./pool.js";
 import { nip44EncryptWithKey, nip44DecryptWithKey, b64uToBytesSafe, bytesToB64uString } from "./crypto.js";
 import { REQUIRED_NIP46_PERMS } from "./auth/nip46Perms.js";
-import { sha256 } from "@noble/hashes/sha256";
-import { hkdf } from "@noble/hashes/hkdf";
-import { bytesToHex } from "@noble/hashes/utils";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 
 const envRelays = (import.meta.env.VITE_DVM_RELAYS || "")
   .split(/[, \n]/)
