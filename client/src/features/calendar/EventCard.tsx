@@ -61,7 +61,7 @@ export function EventCard({
         role="button"
         aria-label={event.title}
         className={cn(
-          "group relative cursor-pointer overflow-hidden rounded-xl border px-2 py-1.5 text-sm shadow-sm transition-colors hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
+          "ps-event-card group relative cursor-pointer overflow-hidden rounded-xl border px-2 py-1.5 text-sm shadow-sm transition-colors hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
           dragging ? "ring-2 ring-indigo-400/60" : "",
           className
         )}
@@ -121,7 +121,7 @@ export function EventCard({
       role="button"
       aria-label={event.title}
       className={cn(
-        "group relative cursor-pointer overflow-hidden rounded-2xl border px-3 py-2 text-sm shadow-sm transition-colors hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
+        "ps-event-card group relative cursor-pointer overflow-hidden rounded-2xl border px-3 py-2 text-sm shadow-sm transition-colors hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400",
         dragging ? "ring-2 ring-indigo-400/60" : "",
         className
       )}

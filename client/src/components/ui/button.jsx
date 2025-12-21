@@ -64,9 +64,9 @@ export const Button = forwardRef(function Button(
       {loading && showDots ? (
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
           <span className="inline-flex items-center">
-            <span className="ps-loading-dot mx-0.5 h-1.5 w-1.5 rounded-full bg-white" />
-            <span className="ps-loading-dot mx-0.5 h-1.5 w-1.5 rounded-full bg-white" style={{ animationDelay: "120ms" }} />
-            <span className="ps-loading-dot mx-0.5 h-1.5 w-1.5 rounded-full bg-white" style={{ animationDelay: "240ms" }} />
+            <span className="ps-loading-dot mx-0.5 h-1.5 w-1.5 rounded-full bg-current" />
+            <span className="ps-loading-dot mx-0.5 h-1.5 w-1.5 rounded-full bg-current" style={{ animationDelay: "120ms" }} />
+            <span className="ps-loading-dot mx-0.5 h-1.5 w-1.5 rounded-full bg-current" style={{ animationDelay: "240ms" }} />
           </span>
         </span>
       ) : null}

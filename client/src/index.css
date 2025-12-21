@@ -23,6 +23,21 @@
   --ps-accent-soft: rgba(99, 102, 241, 0.16);
 }
 
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Light Atelier tokens (BoltCanvas reference) */
+  --ps-bg: #f5efe6; /* warm beige */
+  --ps-surface: #fffbf5; /* off-white card */
+  --ps-surface-alt: #f2e9df; /* pale almond */
+  --ps-text: #1f1b16; /* rich charcoal */
+  --ps-muted: #6f655c; /* warm gray */
+  --ps-muted-2: #8b8076; /* secondary warm gray */
+  --ps-border: #e8dfd6; /* linen */
+  --ps-accent: #a3683c; /* cocoa/terracotta */
+  --ps-accent-soft: rgba(163, 104, 60, 0.16);
+}
+
 body {
   min-height: 100vh;
   margin: 0;
@@ -50,6 +65,10 @@ h4,
   background: rgba(99, 102, 241, 0.35);
 }
 
+[data-theme="light"] ::selection {
+  background: rgba(163, 104, 60, 0.28);
+}
+
 /* Custom scrollbar styling (Dark Ink) */
 .custom-scrollbar::-webkit-scrollbar {
   width: 10px;
@@ -70,6 +89,19 @@ h4,
   background: rgba(148, 163, 184, 0.42);
 }
 
+[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(245, 239, 230, 0.9);
+}
+
+[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(111, 101, 92, 0.28);
+  border: 3px solid rgba(245, 239, 230, 0.9);
+}
+
+[data-theme="light"] .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(111, 101, 92, 0.4);
+}
+
 /* Subtle grey-purple loading background (matches BoltCanvas “Dark Ink”) */
 .btn-loading {
   background-color: #3d3a56;
@@ -80,6 +112,15 @@ h4,
   );
   background-size: 100% 100%;
   transition: background-color 200ms ease, opacity 200ms ease;
+}
+
+[data-theme="light"] .btn-loading {
+  background-color: #e5d8c7;
+  background-image: linear-gradient(
+    180deg,
+    rgba(163, 104, 60, 0.12),
+    rgba(31, 27, 22, 0.05)
+  );
 }
 
 @keyframes ps-dot-sway {
@@ -103,4 +144,375 @@ h4,
 button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* ===================================================================
+   LIGHT ATELIER THEME (beige) - runtime overrides, no Tailwind rebuild
+   -------------------------------------------------------------------
+   We remap the common Tailwind utility colors used in the app when
+   <html data-theme="light"> is present. Dark stays as-is.
+   =================================================================== */
+
+[data-theme="light"] body {
+  background-color: var(--ps-bg);
+  color: var(--ps-text);
+}
+
+/* Map dark surfaces to Light Atelier surfaces */
+[data-theme="light"] .bg-slate-950 {
+  background-color: var(--ps-bg) !important;
+}
+[data-theme="light"] .bg-slate-950\/80 {
+  background-color: rgba(245, 239, 230, 0.88) !important;
+}
+[data-theme="light"] .bg-slate-950\/70 {
+  background-color: rgba(245, 239, 230, 0.82) !important;
+}
+[data-theme="light"] .bg-slate-950\/60 {
+  background-color: rgba(245, 239, 230, 0.76) !important;
+}
+[data-theme="light"] .bg-slate-950\/50 {
+  background-color: rgba(245, 239, 230, 0.68) !important;
+}
+[data-theme="light"] .bg-slate-950\/40 {
+  background-color: rgba(245, 239, 230, 0.56) !important;
+}
+
+[data-theme="light"] .bg-slate-900 {
+  background-color: var(--ps-surface) !important;
+}
+[data-theme="light"] .bg-slate-900\/90 {
+  background-color: rgba(255, 251, 245, 0.9) !important;
+}
+[data-theme="light"] .bg-slate-900\/95 {
+  background-color: rgba(255, 251, 245, 0.95) !important;
+}
+[data-theme="light"] .bg-slate-900\/80 {
+  background-color: rgba(255, 251, 245, 0.84) !important;
+}
+[data-theme="light"] .bg-slate-900\/70 {
+  background-color: rgba(255, 251, 245, 0.76) !important;
+}
+[data-theme="light"] .bg-slate-900\/60 {
+  background-color: rgba(255, 251, 245, 0.7) !important;
+}
+[data-theme="light"] .bg-slate-800 {
+  background-color: var(--ps-surface-alt) !important;
+}
+[data-theme="light"] .bg-slate-800\/70 {
+  background-color: rgba(242, 233, 223, 0.7) !important;
+}
+
+/* Low-opacity "black" surfaces used as media/quote containers */
+[data-theme="light"] .bg-black\/20 {
+  background-color: rgba(31, 27, 22, 0.06) !important;
+}
+[data-theme="light"] .bg-black\/30 {
+  background-color: rgba(31, 27, 22, 0.09) !important;
+}
+[data-theme="light"] .bg-black\/40 {
+  background-color: rgba(31, 27, 22, 0.14) !important;
+}
+
+/* Low-opacity "white" surfaces used for hover and skeletons */
+[data-theme="light"] .bg-white\/5 {
+  background-color: rgba(31, 27, 22, 0.04) !important;
+}
+[data-theme="light"] .hover\:bg-white\/5:hover {
+  background-color: rgba(31, 27, 22, 0.06) !important;
+}
+[data-theme="light"] .bg-white\/10 {
+  background-color: rgba(31, 27, 22, 0.06) !important;
+}
+[data-theme="light"] .bg-white\/15 {
+  background-color: rgba(31, 27, 22, 0.08) !important;
+}
+
+[data-theme="light"] .hover\:bg-white\/15:hover {
+  background-color: rgba(31, 27, 22, 0.1) !important;
+}
+[data-theme="light"] .hover\:bg-white\/20:hover {
+  background-color: rgba(31, 27, 22, 0.14) !important;
+}
+
+/* Hover variants for remapped surfaces */
+[data-theme="light"] .hover\:bg-slate-950\/80:hover {
+  background-color: rgba(245, 239, 230, 0.88) !important;
+}
+[data-theme="light"] .hover\:bg-slate-800:hover {
+  background-color: var(--ps-surface-alt) !important;
+}
+[data-theme="light"] .hover\:bg-slate-800\/70:hover {
+  background-color: rgba(242, 233, 223, 0.7) !important;
+}
+[data-theme="light"] .hover\:bg-slate-800\/30:hover {
+  background-color: rgba(242, 233, 223, 0.45) !important;
+}
+
+/* Hover variants for ring colors */
+[data-theme="light"] .hover\:ring-white\/10:hover,
+[data-theme="light"] .hover\:ring-white\/15:hover,
+[data-theme="light"] .hover\:ring-white\/20:hover {
+  --tw-ring-color: var(--ps-border) !important;
+}
+[data-theme="light"] .hover\:ring-indigo-400\/60:hover {
+  --tw-ring-color: rgba(163, 104, 60, 0.55) !important;
+}
+[data-theme="light"] .hover\:ring-indigo-400\/30:hover {
+  --tw-ring-color: rgba(163, 104, 60, 0.3) !important;
+}
+
+/* Hover text mappings */
+[data-theme="light"] .hover\:text-white:hover,
+[data-theme="light"] .hover\:text-white\/80:hover,
+[data-theme="light"] .hover\:text-white\/70:hover {
+  color: var(--ps-text) !important;
+}
+
+/* Header translucency */
+[data-theme="light"] .supports-\[backdrop-filter\]\:bg-white\/5 {
+  background-color: rgba(255, 251, 245, 0.66) !important;
+}
+
+/* Borders + rings */
+[data-theme="light"] .ring-white\/10,
+[data-theme="light"] .ring-white\/15,
+[data-theme="light"] .ring-white\/20 {
+  --tw-ring-color: var(--ps-border) !important;
+}
+[data-theme="light"] .border-white\/10,
+[data-theme="light"] .border-white\/20 {
+  border-color: var(--ps-border) !important;
+}
+[data-theme="light"] .border-b.border-white\/10 {
+  border-bottom-color: var(--ps-border) !important;
+}
+[data-theme="light"] .border-t.border-white\/10 {
+  border-top-color: var(--ps-border) !important;
+}
+
+/* Text: remap "white" utilities to readable dark text */
+[data-theme="light"] .text-white,
+[data-theme="light"] .text-white\/95,
+[data-theme="light"] .text-white\/90,
+[data-theme="light"] .text-white\/85 {
+  color: var(--ps-text) !important;
+}
+[data-theme="light"] .text-white\/80 {
+  color: var(--ps-muted) !important;
+}
+[data-theme="light"] .text-white\/75 {
+  color: var(--ps-muted) !important;
+}
+[data-theme="light"] .text-white\/70,
+[data-theme="light"] .text-white\/60 {
+  color: var(--ps-muted) !important;
+  opacity: 0.98;
+}
+[data-theme="light"] .text-white\/50,
+[data-theme="light"] .text-white\/40,
+[data-theme="light"] .text-white\/30,
+[data-theme="light"] .text-white\/20,
+[data-theme="light"] .text-white\/10 {
+  color: var(--ps-muted-2) !important;
+}
+
+[data-theme="light"] ::placeholder {
+  color: var(--ps-muted-2);
+  opacity: 1;
+}
+[data-theme="light"] .placeholder\:text-white\/40::placeholder {
+  color: var(--ps-muted-2) !important;
+  opacity: 1;
+}
+
+/* Links and decoration */
+[data-theme="light"] a {
+  color: inherit;
+}
+[data-theme="light"] .decoration-white\/30 {
+  text-decoration-color: rgba(31, 27, 22, 0.22) !important;
+}
+[data-theme="light"] .hover\:decoration-white\/70:hover {
+  text-decoration-color: rgba(31, 27, 22, 0.5) !important;
+}
+
+/* Accent: indigo -> cocoa */
+[data-theme="light"] .bg-indigo-500\/90,
+[data-theme="light"] .bg-indigo-500\/80,
+[data-theme="light"] .hover\:bg-indigo-500:hover {
+  background-color: var(--ps-accent) !important;
+  color: #ffffff !important;
+}
+[data-theme="light"] .bg-indigo-500\/70,
+[data-theme="light"] .bg-indigo-500\/60 {
+  background-color: var(--ps-accent) !important;
+  color: #ffffff !important;
+}
+[data-theme="light"] .bg-indigo-500\/20,
+[data-theme="light"] .bg-indigo-500\/15,
+[data-theme="light"] .bg-indigo-500\/10 {
+  background-color: var(--ps-accent-soft) !important;
+}
+[data-theme="light"] .text-indigo-100,
+[data-theme="light"] .text-indigo-200,
+[data-theme="light"] .text-indigo-200\/80 {
+  color: var(--ps-accent) !important;
+}
+[data-theme="light"] .bg-indigo-400 {
+  background-color: var(--ps-accent) !important;
+}
+
+/* Success / supporter UI (emerald): use light accents with dark text */
+[data-theme="light"] .bg-emerald-950\/50 {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+}
+[data-theme="light"] .ring-emerald-500\/20 {
+  --tw-ring-color: rgba(16, 185, 129, 0.26) !important;
+}
+[data-theme="light"] .bg-emerald-500\/15 {
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+[data-theme="light"] .ring-emerald-400\/30 {
+  --tw-ring-color: rgba(16, 185, 129, 0.28) !important;
+}
+[data-theme="light"] .text-emerald-200 {
+  color: #065f46 !important; /* emerald-800 */
+}
+[data-theme="light"] .text-emerald-100\/70 {
+  color: rgba(6, 95, 70, 0.78) !important;
+}
+
+/* Destructive buttons (red): use light red background + dark red text */
+[data-theme="light"] .bg-red-500\/15 {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+}
+[data-theme="light"] .hover\:bg-red-500\/20:hover {
+  background-color: rgba(239, 68, 68, 0.16) !important;
+}
+[data-theme="light"] .ring-red-400\/30 {
+  --tw-ring-color: rgba(239, 68, 68, 0.28) !important;
+}
+[data-theme="light"] .text-red-200 {
+  color: #991b1b !important; /* red-800 */
+}
+
+/* Destructive actions keep white labels on red */
+[data-theme="light"] .bg-red-500,
+[data-theme="light"] .bg-red-500\/90,
+[data-theme="light"] .hover\:bg-red-500:hover {
+  color: #ffffff !important;
+}
+
+/* Calendar nav icons: keep strong contrast in light mode */
+[data-theme="light"] .ps-cal-nav {
+  color: var(--ps-text) !important;
+}
+[data-theme="light"] .ps-cal-nav.text-white\/30 {
+  color: rgba(111, 101, 92, 0.55) !important;
+}
+
+/* Calendar event cards: flatter in light mode */
+[data-theme="light"] .ps-event-card {
+  box-shadow: none !important;
+}
+
+/* Toasts: remove dark gradients and make text readable in light mode */
+[data-theme="light"] .ps-toast {
+  background: var(--ps-surface) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--ps-border) !important;
+}
+[data-theme="light"] .ps-toast.ring-1,
+[data-theme="light"] .ps-toast.ring-2 {
+  --tw-ring-color: transparent !important;
+}
+[data-theme="light"] .ps-toast-dot {
+  background-color: var(--ps-accent) !important;
+  box-shadow: 0 0 0 4px rgba(163, 104, 60, 0.16) !important;
+}
+
+/* Quick Status counts: keep strong contrast in light mode */
+[data-theme="light"] .ps-quick-count--posted {
+  color: #166534 !important; /* emerald-800 */
+}
+[data-theme="light"] .ps-quick-count--drafts {
+  color: #92400e !important; /* amber-800 */
+}
+
+/* Cards: remove "3D" shadow in light mode */
+[data-theme="light"] .ps-card {
+  box-shadow: none !important;
+}
+
+/* Focus rings: indigo -> cocoa */
+[data-theme="light"] .focus-visible\:ring-indigo-400:focus-visible,
+[data-theme="light"] .focus\:ring-indigo-400:focus {
+  --tw-ring-color: rgba(163, 104, 60, 0.55) !important;
+}
+[data-theme="light"] .ring-indigo-400\/60 {
+  --tw-ring-color: rgba(163, 104, 60, 0.55) !important;
+}
+[data-theme="light"] .ring-indigo-400\/40 {
+  --tw-ring-color: rgba(163, 104, 60, 0.4) !important;
+}
+[data-theme="light"] .ring-indigo-400\/30 {
+  --tw-ring-color: rgba(163, 104, 60, 0.3) !important;
+}
+
+/* Tooltip arrow */
+[data-theme="light"] .border-t-slate-900 {
+  border-top-color: var(--ps-surface) !important;
+}
+
+/* Dark pills (status badges, overlay labels) should keep light text */
+[data-theme="light"] .bg-black\/45.backdrop-blur-sm .text-white,
+[data-theme="light"] .bg-black\/45.backdrop-blur-sm .text-white\/95,
+[data-theme="light"] .bg-black\/45.backdrop-blur-sm .text-white\/90,
+[data-theme="light"] .bg-black\/45.backdrop-blur-sm .text-white\/85,
+[data-theme="light"] .bg-black\/45.backdrop-blur-sm .text-white\/80,
+[data-theme="light"] .bg-black\/45.backdrop-blur-sm .text-white\/70,
+[data-theme="light"] .bg-black\/45.backdrop-blur-sm .text-white\/60,
+[data-theme="light"] .bg-black\/45.backdrop-blur-sm .text-white\/50 {
+  color: #f9fafb !important;
+}
+[data-theme="light"] .bg-black\/35.backdrop-blur-sm .text-white,
+[data-theme="light"] .bg-black\/35.backdrop-blur-sm .text-white\/95,
+[data-theme="light"] .bg-black\/35.backdrop-blur-sm .text-white\/90,
+[data-theme="light"] .bg-black\/35.backdrop-blur-sm .text-white\/85,
+[data-theme="light"] .bg-black\/35.backdrop-blur-sm .text-white\/80,
+[data-theme="light"] .bg-black\/35.backdrop-blur-sm .text-white\/70,
+[data-theme="light"] .bg-black\/35.backdrop-blur-sm .text-white\/60,
+[data-theme="light"] .bg-black\/35.backdrop-blur-sm .text-white\/50 {
+  color: #f9fafb !important;
+}
+
+/* Same element carries bg + text utility (calendar pills) */
+[data-theme="light"] .bg-black\/45.text-white,
+[data-theme="light"] .bg-black\/45.text-white\/95,
+[data-theme="light"] .bg-black\/45.text-white\/90,
+[data-theme="light"] .bg-black\/45.text-white\/85,
+[data-theme="light"] .bg-black\/45.text-white\/80,
+[data-theme="light"] .bg-black\/45.text-white\/70,
+[data-theme="light"] .bg-black\/45.text-white\/60 {
+  color: #f9fafb !important;
+}
+[data-theme="light"] .bg-black\/35.text-white,
+[data-theme="light"] .bg-black\/35.text-white\/95,
+[data-theme="light"] .bg-black\/35.text-white\/90,
+[data-theme="light"] .bg-black\/35.text-white\/85,
+[data-theme="light"] .bg-black\/35.text-white\/80,
+[data-theme="light"] .bg-black\/35.text-white\/70,
+[data-theme="light"] .bg-black\/35.text-white\/60 {
+  color: #f9fafb !important;
+}
+
+/* Keep ring on dark pills actually light (not beige) */
+[data-theme="light"] .bg-black\/45.ring-white\/10,
+[data-theme="light"] .bg-black\/45.ring-white\/15,
+[data-theme="light"] .bg-black\/45.ring-white\/20,
+[data-theme="light"] .bg-black\/35.ring-white\/10,
+[data-theme="light"] .bg-black\/35.ring-white\/15,
+[data-theme="light"] .bg-black\/35.ring-white\/20 {
+  --tw-ring-color: rgba(255, 255, 255, 0.2) !important;
 }

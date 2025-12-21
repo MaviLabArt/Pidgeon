@@ -26,6 +26,8 @@ import {
   Menu,
   LogOut,
   User,
+  Github,
+  Copy,
 } from "lucide-react";
 import QRCode from "react-qr-code";
 import { useNostr } from "@/providers/NostrProvider.jsx";
@@ -499,6 +501,18 @@ export default function PidgeonUI() {
   const [now, setNow] = useState(new Date());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try {
+      const stored = String(readLocalString("pidgeon.theme", "") || "").trim();
+      return stored === "light" ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  });
+  const setThemePreference = useCallback((next) => {
+    const normalized = next === "light" ? "light" : "dark";
+    setTheme(normalized);
+  }, []);
   const [analyticsEnabled, setAnalyticsEnabled] = useState(() => {
     try {
       return readLocalString("pidgeon.analytics.enabled", "false") === "true";
@@ -685,6 +699,7 @@ export default function PidgeonUI() {
   );
   const localSettings = useMemo(
     () => ({
+      ...(theme === "light" ? { theme: "light" } : {}),
       uploadBackend: uploadBackend === "nip96" ? "nip96" : "blossom",
       nip96Service: String(nip96Service || "").trim(),
       blossomServers: String(blossomServers || "").trim(),
@@ -701,7 +716,7 @@ export default function PidgeonUI() {
         return { dvm: { pubkey: pk, relays } };
       })(),
     }),
-    [uploadBackend, nip96Service, blossomServers, analyticsEnabled, publishRelaysMode, publishRelaysCustom, supportInvoiceSats, dvmPubkeyOverride, dvmRelaysOverride]
+    [theme, uploadBackend, nip96Service, blossomServers, analyticsEnabled, publishRelaysMode, publishRelaysCustom, supportInvoiceSats, dvmPubkeyOverride, dvmRelaysOverride]
   );
   const settingsDirty = useMemo(() => {
     const remote = settingsSync.remote;
@@ -830,6 +845,20 @@ export default function PidgeonUI() {
       localStorage.setItem("pidgeon.analytics.enabled", analyticsEnabled ? "true" : "false");
     } catch {}
   }, [analyticsEnabled]);
+
+  useEffect(() => {
+    const normalized = theme === "light" ? "light" : "dark";
+    try {
+      document.documentElement.setAttribute("data-theme", normalized);
+    } catch {}
+    try {
+      localStorage.setItem("pidgeon.theme", normalized);
+    } catch {}
+    try {
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", normalized === "light" ? "#F5EFE6" : "#020617");
+    } catch {}
+  }, [theme]);
 
   useEffect(() => {
     try {
@@ -966,6 +995,10 @@ export default function PidgeonUI() {
   }, [pubkey, activeRelays]);
 
   const remaining = charLimit - editor.content.length;
+
+  const FOOTER_NPUB = "npub1lvzt92km8nua8wt675kn74zwz9v7uxjts4yrx32f6yahetz0sa5s7szg03";
+  const FOOTER_REPO_URL = "https://github.com/MaviLabArt/Pidgeon";
+  const FOOTER_REPO_LABEL = "MaviLabArt/Pidgeon";
 
   const showToast = useCallback((msg) => {
     const message = String(msg || "").trim();
@@ -1208,6 +1241,10 @@ export default function PidgeonUI() {
 
   const applyRemoteSettings = (next) => {
     if (!next || typeof next !== "object") return;
+    if (typeof next.theme === "string") {
+      const t = String(next.theme || "").trim().toLowerCase();
+      if (t === "light" || t === "dark") setThemePreference(t);
+    }
     if (next.uploadBackend === "nip96" || next.uploadBackend === "blossom") {
       setUploadBackend(next.uploadBackend);
     }
@@ -3024,24 +3061,24 @@ export default function PidgeonUI() {
   }, [analyticsEnabled, view]);
 
   return (
-    <div className="min-h-screen w-full bg-slate-950 text-white">
+    <div className="min-h-screen w-full bg-slate-950 text-white flex flex-col">
       {/* Toast */}
-      {toast ? (
-        <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center px-4">
-	          <div
-	            className={clsx(
-	              "flex w-full max-w-md items-center justify-center gap-4 rounded-3xl bg-gradient-to-br from-indigo-950/70 via-slate-800/95 to-slate-900/95 px-6 py-4 ring-1 ring-white/20 shadow-[0_1px_0_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.65)] backdrop-blur-sm transition-all duration-500 ease-out transform text-center",
-	              toastVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8",
-	              toastPop ? "scale-105 shadow-[0_12px_40px_rgba(99,102,241,0.35)] ring-2 ring-indigo-400/60" : "scale-100"
-	            )}
-	            role="status"
-	            aria-live="polite"
-	          >
-            <div className="h-2.5 w-2.5 rounded-full bg-indigo-300 shadow-[0_0_0_4px_rgba(99,102,241,0.18)]" />
-            <span className="text-base text-white/90">{toast}</span>
-          </div>
-        </div>
-      ) : null}
+		      {toast ? (
+		        <div className="pointer-events-none fixed inset-0 z-[80] flex items-center justify-center px-4">
+			          <div
+			            className={clsx(
+		              "ps-toast flex w-full max-w-md items-center justify-center gap-4 rounded-3xl bg-gradient-to-br from-indigo-950/70 via-slate-800/95 to-slate-900/95 px-6 py-4 ring-1 ring-white/20 shadow-[0_1px_0_rgba(255,255,255,0.08),0_24px_80px_rgba(0,0,0,0.65)] backdrop-blur-sm transition-all duration-500 ease-out transform text-center",
+		              toastVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8",
+		              toastPop ? "scale-105 shadow-[0_12px_40px_rgba(99,102,241,0.35)] ring-2 ring-indigo-400/60" : "scale-100"
+		            )}
+		            role="status"
+		            aria-live="polite"
+		          >
+	            <div className="ps-toast-dot h-2.5 w-2.5 rounded-full bg-indigo-300 shadow-[0_0_0_4px_rgba(99,102,241,0.18)]" />
+	            <span className="text-base text-white/90">{toast}</span>
+	          </div>
+	        </div>
+	      ) : null}
 
       <TopBar
         pubkey={pubkey}
@@ -3091,8 +3128,8 @@ export default function PidgeonUI() {
         </div>
       )}
 
-      <main className="flex-1 min-w-0">
-        <div className="mx-auto w-full max-w-[1600px] px-4 py-6 md:px-6 lg:px-8 lg:py-8">
+	      <main className="flex-1 min-w-0">
+	        <div className="mx-auto w-full max-w-[1600px] px-4 py-6 md:px-6 lg:px-8 lg:py-8">
           {(mailboxSync.status === "syncing" || mailboxSync.status === "retrying") && (
             <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-indigo-500/10 px-4 py-2 ring-1 ring-indigo-400/30">
               <div className="text-sm text-indigo-200">
@@ -3266,6 +3303,8 @@ export default function PidgeonUI() {
           {view === "settings" && (
             <Suspense fallback={<ViewFallback title="Loading Settings…" />}>
               <SettingsView
+                theme={theme}
+                setTheme={setThemePreference}
                 nip96Service={nip96Service}
                 setNip96Service={setNip96Service}
                 uploadBackend={uploadBackend}
@@ -3299,14 +3338,48 @@ export default function PidgeonUI() {
               />
             </Suspense>
           )}
-        </div>
-      </main>
+	        </div>
+	      </main>
 
-      {/* Dialogs */}
-      <Dialog
-        open={supportDialog.open}
-        onOpenChange={(open) => {
-          if (open) return;
+        <footer className="mt-auto border-t border-white/10">
+          <div className="mx-auto w-full max-w-[1600px] px-4 py-4 md:px-6 lg:px-8">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="text-xs text-white/50">Built by</div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    copyText(FOOTER_NPUB).then((ok) => showToast(ok ? "Copied npub" : "Copy failed"));
+                  }}
+                  className="group inline-flex items-center gap-2 rounded-2xl bg-slate-950/40 px-3 py-2 ring-1 ring-white/10 transition hover:bg-slate-950/60 hover:ring-white/20"
+                  aria-label="Copy author npub"
+                >
+                  <span className="font-mono text-[11px] text-white/80 max-w-[72vw] sm:max-w-[360px] truncate">
+                    {FOOTER_NPUB}
+                  </span>
+                  <Copy className="h-4 w-4 text-white/50 group-hover:text-white/80" />
+                </button>
+              </div>
+
+              <a
+                href={FOOTER_REPO_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-950/40 px-3 py-2 ring-1 ring-white/10 transition hover:bg-slate-950/60 hover:ring-white/20"
+              >
+                <Github className="h-4 w-4 text-white/60" />
+                <span className="text-xs font-medium text-white/80">GitHub</span>
+                <span className="font-mono text-[11px] text-indigo-200">{FOOTER_REPO_LABEL}</span>
+              </a>
+            </div>
+          </div>
+        </footer>
+
+	      {/* Dialogs */}
+	      <Dialog
+	        open={supportDialog.open}
+	        onOpenChange={(open) => {
+	          if (open) return;
           handleSupportDialogAction(supportDialog.source === "mailbox" ? "maybe_later" : "close");
         }}
       >
@@ -4311,31 +4384,31 @@ function ComposeView({
               <div className="text-xs text-white/50">Ready to post</div>
             </button>
 
-            <button
-              onClick={() => onViewJobs && onViewJobs('posted')}
-              className="group text-left rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10 transition-colors hover:bg-slate-950/80 hover:ring-white/20"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-white/70">Posted</span>
-                <span className="text-lg font-bold text-emerald-200 group-hover:scale-110 transition-transform">
-                  {postedCount}
-                </span>
-              </div>
-              <div className="text-xs text-white/50">Published</div>
-            </button>
+	            <button
+	              onClick={() => onViewJobs && onViewJobs('posted')}
+	              className="group text-left rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10 transition-colors hover:bg-slate-950/80 hover:ring-white/20"
+	            >
+	              <div className="flex items-center justify-between mb-1">
+	                <span className="text-sm font-medium text-white/70">Posted</span>
+	                <span className="ps-quick-count ps-quick-count--posted text-lg font-bold text-emerald-200 group-hover:scale-110 transition-transform">
+	                  {postedCount}
+	                </span>
+	              </div>
+	              <div className="text-xs text-white/50">Published</div>
+	            </button>
 
-            <button
-              onClick={onViewDrafts}
-              className="group text-left rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10 transition-colors hover:bg-slate-950/80 hover:ring-white/20"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-white/70">Drafts</span>
-                <span className="text-lg font-bold text-amber-200 group-hover:scale-110 transition-transform">
-                  {draftsCount}
-                </span>
-              </div>
-              <div className="text-xs text-white/50">Synced via relays</div>
-            </button>
+	            <button
+	              onClick={onViewDrafts}
+	              className="group text-left rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10 transition-colors hover:bg-slate-950/80 hover:ring-white/20"
+	            >
+	              <div className="flex items-center justify-between mb-1">
+	                <span className="text-sm font-medium text-white/70">Drafts</span>
+	                <span className="ps-quick-count ps-quick-count--drafts text-lg font-bold text-amber-200 group-hover:scale-110 transition-transform">
+	                  {draftsCount}
+	                </span>
+	              </div>
+	              <div className="text-xs text-white/50">Synced via relays</div>
+	            </button>
           </div>
         </CardContent>
       </Card>
@@ -4706,7 +4779,7 @@ function CalendarView({ now, setNow, monthDays, jobsByDay, onOpenReschedule, onO
                   style={{ background: list.length ? randomColorFromString(key) : undefined }}
                 >
                   <div className="flex items-center justify-between">
-                    <div className={clsx("h-6 w-6 rounded-md text-center text-[12px] leading-6", isToday ? "bg-slate-900 font-semibold text-white" : "text-slate-700")}>{date.getDate()}</div>
+                    <div className={clsx("h-6 w-6 rounded-md text-center text-[12px] leading-6", isToday ? "bg-[#1F1B16] font-semibold text-white" : "text-slate-700")}>{date.getDate()}</div>
                     {list.length > 0 && (
                       <Badge variant="secondary" className="rounded-md text-[10px]">{list.length}</Badge>
                     )}

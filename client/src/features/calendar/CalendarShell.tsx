@@ -300,7 +300,7 @@ export function CalendarShell({
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 flex-1">
               <button
-                className="rounded-xl bg-slate-900 p-2 text-white/80 ring-1 ring-white/10 transition hover:text-white hover:ring-indigo-400/60 active:translate-y-px"
+                className="ps-cal-nav rounded-xl bg-slate-900 p-2 text-white/80 ring-1 ring-white/10 transition hover:text-white hover:ring-indigo-400/60 active:translate-y-px"
                 onClick={() =>
                   setCurrentDate((d) =>
                     view === "week" ? addWeeks(d, -1) : view === "day" ? addDays(d, -1) : addMonths(d, -1)
@@ -310,7 +310,7 @@ export function CalendarShell({
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
-                className="rounded-xl bg-slate-900 p-2 text-white/80 ring-1 ring-white/10 transition hover:text-white hover:ring-indigo-400/60 active:translate-y-px"
+                className="ps-cal-nav rounded-xl bg-slate-900 p-2 text-white/80 ring-1 ring-white/10 transition hover:text-white hover:ring-indigo-400/60 active:translate-y-px"
                 onClick={() =>
                   setCurrentDate((d) =>
                     view === "week" ? addWeeks(d, 1) : view === "day" ? addDays(d, 1) : addMonths(d, 1)

@@ -31,6 +31,8 @@ function isHexPubkey(value) {
 }
 
 export function SettingsView({
+  theme = "dark",
+  setTheme,
   nip96Service,
   setNip96Service,
   uploadBackend,
@@ -135,6 +137,22 @@ export function SettingsView({
             ) : null}
           </div>
         ) : null}
+
+        <div className="rounded-2xl bg-slate-950/60 p-3 ring-1 ring-white/10">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">Appearance</div>
+              <div className="mt-1 text-[11px] text-white/60">Switch between Dark Ink and Light Atelier.</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-white/60">Light</span>
+              <Switch
+                checked={theme === "light"}
+                onCheckedChange={(on) => setTheme?.(on ? "light" : "dark")}
+              />
+            </div>
+          </div>
+        </div>
 
         <div className="rounded-2xl bg-slate-950/60 p-3 ring-1 ring-white/10">
           <div className="flex items-center justify-between gap-3">

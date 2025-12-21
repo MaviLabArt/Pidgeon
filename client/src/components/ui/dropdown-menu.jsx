@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 const DropdownContext = createContext();
@@ -64,22 +65,67 @@ export function DropdownMenuTrigger({ asChild, children, ...props }) {
 }
 
 export function DropdownMenuContent({ className, align = "start", children, ...props }) {
-  const { open, contentRef } = useDropdown();
+  const { open, contentRef, triggerRef } = useDropdown();
   if (!open) return null;
-  const alignment = align === "end" ? "right-0" : "left-0";
+  const [pos, setPos] = useState(() => ({ top: 0, left: 0, ready: false }));
 
-  return (
+  useEffect(() => {
+    if (!open) return;
+
+    let raf = 0;
+    const margin = 12;
+    const gap = 8;
+
+    const update = () => {
+      raf = 0;
+      const triggerEl = triggerRef.current;
+      if (!triggerEl) return;
+      const rect = triggerEl.getBoundingClientRect();
+      const menuRect = contentRef.current?.getBoundingClientRect();
+      const menuWidth = menuRect?.width || 220;
+      const menuHeight = menuRect?.height || 240;
+
+      const desiredLeft = align === "end" ? rect.right - menuWidth : rect.left;
+      const left = Math.min(Math.max(margin, desiredLeft), window.innerWidth - menuWidth - margin);
+
+      const belowTop = rect.bottom + gap;
+      const aboveTop = rect.top - gap - menuHeight;
+      const topCandidate =
+        belowTop + menuHeight <= window.innerHeight - margin ? belowTop : aboveTop;
+      const top = Math.min(Math.max(margin, topCandidate), window.innerHeight - menuHeight - margin);
+
+      setPos({ top, left, ready: true });
+    };
+
+    const schedule = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(update);
+    };
+
+    schedule();
+    window.addEventListener("resize", schedule);
+    window.addEventListener("scroll", schedule, true);
+    return () => {
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("scroll", schedule, true);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [open, align, triggerRef, contentRef]);
+
+  return createPortal(
     <div
       ref={contentRef}
       className={cn(
-        "absolute z-50 mt-2 min-w-[180px] overflow-hidden rounded-2xl bg-slate-900 text-white ring-1 ring-white/10 shadow-xl",
-        alignment,
+        "fixed z-[9999] min-w-[180px] overflow-hidden rounded-2xl bg-slate-900 text-white ring-1 ring-white/10 shadow-xl",
+        pos.ready ? "opacity-100" : "opacity-0",
         className
       )}
+      style={{ top: pos.top, left: pos.left }}
       {...props}
     >
       {children}
-    </div>
+    </div>,
+    document.body
   );
 }
 

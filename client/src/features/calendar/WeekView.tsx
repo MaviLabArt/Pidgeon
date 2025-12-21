@@ -230,7 +230,7 @@ export function WeekView({ date, timezone, events, onEventClick, onCreateRange }
               onClick={() => setMobileDayOffset((prev) => Math.max(0, prev - 1))}
               disabled={!canGoPrevDay}
               className={cn(
-                "rounded-lg p-2 transition",
+                "ps-cal-nav rounded-lg p-2 transition",
                 canGoPrevDay
                   ? "text-white/80 hover:bg-white/5"
                   : "text-white/30 cursor-not-allowed"
@@ -249,7 +249,7 @@ export function WeekView({ date, timezone, events, onEventClick, onCreateRange }
               onClick={() => setMobileDayOffset((prev) => Math.min(6, prev + 1))}
               disabled={!canGoNextDay}
               className={cn(
-                "rounded-lg p-2 transition",
+                "ps-cal-nav rounded-lg p-2 transition",
                 canGoNextDay
                   ? "text-white/80 hover:bg-white/5"
                   : "text-white/30 cursor-not-allowed"
