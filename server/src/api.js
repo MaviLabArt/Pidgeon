@@ -3,6 +3,45 @@ import cors from "cors";
 import { randomUUID } from "crypto";
 import { Readable } from "stream";
 import { mountClient } from "./serveClient.js";
+import { getPublicKey, nip19 } from "nostr-tools";
+
+function parseNostrSecret(secret = "") {
+  const raw = String(secret || "").trim();
+  if (!raw) return null;
+  if (raw.startsWith("nsec1")) {
+    try {
+      const decoded = nip19.decode(raw);
+      if (decoded.type === "nsec") return decoded.data;
+    } catch {
+      return null;
+    }
+  }
+  if (/^[0-9a-f]{64}$/i.test(raw)) {
+    return Uint8Array.from(Buffer.from(raw, "hex"));
+  }
+  return null;
+}
+
+function getNip05MessengerPubkeyHex() {
+  const override = String(process.env.NIP05_PUBKEY || "").trim();
+  if (override) return override;
+  const secretBytes = parseNostrSecret(process.env.DVM_SECRET || "");
+  if (!secretBytes) return "";
+  try {
+    return getPublicKey(secretBytes);
+  } catch {
+    return "";
+  }
+}
+
+function getNip05MessengerRelays() {
+  const raw = String(process.env.NIP05_RELAYS || process.env.DVM_RELAYS || "").trim();
+  return raw
+    .split(/[, \n]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((u) => u.startsWith("wss://"));
+}
 
 const nip96Cache = new Map();
 const calendarEvents = [];
@@ -65,6 +104,35 @@ export function startApiServer() {
       })
     );
   }
+
+  app.get("/.well-known/nostr.json", (req, res) => {
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    res.setHeader("access-control-allow-origin", "*");
+    res.setHeader("cache-control", "public, max-age=300");
+
+    const name = String(req.query?.name || "").trim().toLowerCase();
+    const localPart = String(process.env.NIP05_NAME || "messenger").trim().toLowerCase();
+    const pubkey = getNip05MessengerPubkeyHex();
+    const relays = getNip05MessengerRelays();
+
+    if (!pubkey) return res.status(500).json({ error: "NIP-05 pubkey not configured" });
+    if (name && name !== localPart) return res.json({ names: {} });
+
+    const payload = {
+      names: {
+        [localPart]: pubkey
+      },
+      ...(relays.length
+        ? {
+            relays: {
+              [pubkey]: relays
+            }
+          }
+        : {})
+    };
+
+    return res.json(payload);
+  });
 
   app.get("/api/health", (req, res) => {
     res.json({ ok: true });

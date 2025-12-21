@@ -77,6 +77,7 @@ let DVM_PUBLISH_RELAYS = [];
 let DVM_NAME = "";
 let DVM_ABOUT = "";
 let DVM_PICTURE = "";
+let DVM_NIP05 = "";
 let LOADTEST_MODE = false;
 let jobScheduler = null;
 let supportVerifyTimer = null;
@@ -445,18 +446,19 @@ const supportVerifyWorkQueue = createWorkQueue({
 function usage(msg = "") {
   if (msg) console.error(msg);
   console.error(`
-Pidgeon DVM
+	Pidgeon DVM
 
-Configuration is read from env (server/.env) with optional CLI overrides.
+	Configuration is read from env (server/.env) with optional CLI overrides.
 
-CLI overrides:
-  --secret <hex|nsec>                 Overrides DVM_SECRET
-  --name <string>                     Overrides DVM_NAME
-  --about <string>                    Overrides DVM_ABOUT
-  --picture <url>                     Overrides DVM_PICTURE
-  --relay <ws://...>                  Overrides DVM_RELAYS (repeatable or comma-separated)
-  --indexer-relay <ws://...>          Overrides INDEXER_RELAYS (repeatable or comma-separated)
-  --publish-relay <ws://...>          Overrides DVM_PUBLISH_RELAYS (repeatable or comma-separated)
+	CLI overrides:
+	  --secret <hex|nsec>                 Overrides DVM_SECRET
+	  --name <string>                     Overrides DVM_NAME
+	  --about <string>                    Overrides DVM_ABOUT
+	  --picture <url>                     Overrides DVM_PICTURE
+	  --nip05 <name@domain>               Overrides DVM_NIP05 (kind 0 metadata)
+	  --relay <ws://...>                  Overrides DVM_RELAYS (repeatable or comma-separated)
+	  --indexer-relay <ws://...>          Overrides INDEXER_RELAYS (repeatable or comma-separated)
+	  --publish-relay <ws://...>          Overrides DVM_PUBLISH_RELAYS (repeatable or comma-separated)
 
 Local load testing safety:
   --loadtest                           Refuses non-localhost relay URLs for all relay flags above
@@ -536,6 +538,7 @@ function resolveConfig(argv = []) {
   const name = String(args.name || args["dvm-name"] || process.env.DVM_NAME || "Pidgeon DVM").trim();
   const about = String(args.about || args["dvm-about"] || process.env.DVM_ABOUT || "Schedules signed notes on your relays").trim();
   const picture = String(args.picture || args["dvm-picture"] || process.env.DVM_PICTURE || "").trim();
+  const nip05 = String(args.nip05 || process.env.DVM_NIP05 || "").trim();
 
   const cliRelays = flattenArgList(args.relay ?? args.relays ?? args["dvm-relay"] ?? args["dvm-relays"]);
   const cliIndexerRelays = flattenArgList(args["indexer-relay"] ?? args["indexer-relays"]);
@@ -565,7 +568,7 @@ function resolveConfig(argv = []) {
     requireLocalhostRelays(publishRelays, "--publish-relay/DVM_PUBLISH_RELAYS");
   }
 
-  return { loadtest, secret, name, about, picture, dvmRelays, indexerRelays, publishRelays };
+  return { loadtest, secret, name, about, picture, nip05, dvmRelays, indexerRelays, publishRelays };
 }
 
 function isPrivateIp(ip) {
@@ -1858,7 +1861,8 @@ async function publishMetadata({ signer, dvmRelays, indexerRelays }) {
   const meta = {
     name: DVM_NAME,
     about: DVM_ABOUT,
-    picture: DVM_PICTURE
+    picture: DVM_PICTURE,
+    ...(DVM_NIP05 ? { nip05: DVM_NIP05 } : {})
   };
   const metaHash = crypto
     .createHash("sha256")
@@ -2007,6 +2011,7 @@ call(async function main() {
   DVM_NAME = cfg.name;
   DVM_ABOUT = cfg.about;
   DVM_PICTURE = cfg.picture;
+  DVM_NIP05 = cfg.nip05;
   LOADTEST_MODE = Boolean(cfg.loadtest);
 
   DVM_SK_HEX = resolveSecret(cfg.secret);
