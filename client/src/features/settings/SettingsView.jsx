@@ -217,21 +217,21 @@ export function SettingsView({
           </div>
 
           <div className="grid gap-2">
-            <label className="flex items-start gap-3 rounded-2xl bg-slate-900 p-3 ring-1 ring-white/10">
-              <input
-                type="radio"
-                name="publishRelaysMode"
-                value="recommended"
-                checked={publishRelaysMode === "recommended"}
-                onChange={() => setPublishRelaysMode?.("recommended")}
-                className="mt-1"
-              />
-              <div className="min-w-0">
-                <div className="text-sm font-medium">Recommended (default)</div>
-                <div className="text-xs text-white/60">DVM curated publish relay set.</div>
-                {publishRelaysMode === "recommended" && (
-                  <div className="mt-2 rounded-2xl bg-slate-950/50 p-3 ring-1 ring-white/10">
-                    <div className="text-[11px] text-white/60">Will publish to</div>
+	            <label className="flex items-start gap-3 rounded-2xl bg-slate-900 p-3 ring-1 ring-white/10">
+	              <input
+	                type="radio"
+	                name="publishRelaysMode"
+	                value="recommended"
+	                checked={publishRelaysMode === "recommended"}
+	                onChange={() => setPublishRelaysMode?.("recommended")}
+	                className="mt-1"
+	              />
+	              <div className="min-w-0">
+	                <div className="text-sm font-medium">Recommended</div>
+	                <div className="text-xs text-white/60">DVM curated publish relay set (fallback).</div>
+	                {publishRelaysMode === "recommended" && (
+	                  <div className="mt-2 rounded-2xl bg-slate-950/50 p-3 ring-1 ring-white/10">
+	                    <div className="text-[11px] text-white/60">Will publish to</div>
                     <div className="mt-2 max-h-40 space-y-1 overflow-auto font-mono text-[11px] text-white/80">
                       {effectivePublishRelays.map((url) => (
                         <div key={url} className="break-all">
@@ -253,13 +253,13 @@ export function SettingsView({
                 onChange={() => setPublishRelaysMode?.("nip65")}
                 className="mt-1"
               />
-              <div className="min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-medium">My relays (NIP-65)</div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
+	              <div className="min-w-0">
+	                <div className="flex items-center justify-between gap-2">
+	                  <div className="text-sm font-medium">My relays (NIP-65) (default)</div>
+	                  <Button
+	                    type="button"
+	                    variant="outline"
+	                    size="sm"
                     onClick={() => onRefreshNip65PublishRelays?.()}
                     disabled={!pubkey || nip65PublishRelaysStatus === "loading"}
                   >

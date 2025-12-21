@@ -646,9 +646,9 @@ export default function PidgeonUI() {
   const [publishRelaysMode, setPublishRelaysMode] = useState(() => {
     try {
       const stored = readLocalString("pidgeon.publishRelays.mode", "");
-      return stored === "nip65" || stored === "custom" || stored === "recommended" ? stored : "recommended";
+      return stored === "nip65" || stored === "custom" || stored === "recommended" ? stored : "nip65";
     } catch {
-      return "recommended";
+      return "nip65";
     }
   });
   const [publishRelaysCustom, setPublishRelaysCustom] = useState(() => {
@@ -1363,7 +1363,7 @@ export default function PidgeonUI() {
     const pr = next.publishRelays && typeof next.publishRelays === "object" ? next.publishRelays : null;
     if (pr) {
       const mode = String(pr.mode || "").trim();
-      setPublishRelaysMode(mode === "nip65" || mode === "custom" || mode === "recommended" ? mode : "recommended");
+      setPublishRelaysMode(mode === "nip65" || mode === "custom" || mode === "recommended" ? mode : "nip65");
       if (typeof pr.custom === "string") setPublishRelaysCustom(pr.custom);
     }
     if (Object.prototype.hasOwnProperty.call(next, "supportInvoiceSats")) {
