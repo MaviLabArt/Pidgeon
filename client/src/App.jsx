@@ -3528,8 +3528,8 @@ export default function PidgeonUI() {
                   <div className="text-sm font-semibold text-white/90">How it works</div>
                   <div className="mt-3 space-y-3 text-sm text-white/75">
                     <div className="flex gap-3">
-                      <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80 ring-1 ring-white/10">
-                        1
+	                      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80 ring-1 ring-white/10">
+	                        1
 	                      </span>
 	                      <div className="min-w-0">
 	                        <div className="font-medium text-white/90">Login with Nostr</div>
@@ -3537,17 +3537,17 @@ export default function PidgeonUI() {
 	                      </div>
 	                    </div>
                     <div className="flex gap-3">
-                      <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80 ring-1 ring-white/10">
-                        2
-                      </span>
+	                      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80 ring-1 ring-white/10">
+	                        2
+	                      </span>
                       <div className="min-w-0">
                         <div className="font-medium text-white/90">Write, pick a time, schedule</div>
                         <div className="mt-0.5 text-white/70">Save drafts anytime to back up what you’re writing.</div>
                       </div>
                     </div>
                     <div className="flex gap-3">
-                      <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80 ring-1 ring-white/10">
-                        3
+	                      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80 ring-1 ring-white/10">
+	                        3
 	                      </span>
 	                      <div className="min-w-0">
 	                        <div className="font-medium text-white/90">We will post it at your chosen time</div>
