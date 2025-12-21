@@ -491,10 +491,61 @@ const DEFAULT_BLOSSOM_SERVERS = [
   "https://nostr.download",
 ].join("\n");
 
+const VIEW_PARAM = "view";
+const VIEW_ROUTES = {
+  compose: "/",
+  jobs: "/jobs",
+  calendar: "/calendar",
+  drafts: "/drafts",
+  feed: "/feed",
+  dm: "/dm",
+  analytics: "/analytics",
+  how: "/how",
+  settings: "/settings"
+};
+const PATH_TO_VIEW = Object.fromEntries(Object.entries(VIEW_ROUTES).map(([k, v]) => [v, k]));
+const HOW_PATH_ALIASES = new Set(["/howto", "/how-to", "/how-it-works", "/help"]);
+
+function normalizeViewName(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  const stripped = raw.replace(/^#\/?/, "").replace(/^\//, "").replace(/\/+$/, "");
+  const mapped = stripped === "howto" || stripped === "how-to" || stripped === "help" ? "how" : stripped;
+  return Object.prototype.hasOwnProperty.call(VIEW_ROUTES, mapped) ? mapped : "";
+}
+
+function getInitialViewFromLocation() {
+  if (typeof window === "undefined") return "compose";
+
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const byParam = normalizeViewName(params.get(VIEW_PARAM));
+    if (byParam) return byParam;
+  } catch {}
+
+  try {
+    const path = (String(window.location.pathname || "").replace(/\/+$/, "") || "/").toLowerCase();
+    if (HOW_PATH_ALIASES.has(path)) return "how";
+    const byPath = PATH_TO_VIEW[path];
+    if (byPath) return byPath;
+  } catch {}
+
+  try {
+    const byHash = normalizeViewName(window.location.hash || "");
+    if (byHash) return byHash;
+  } catch {}
+
+  return "compose";
+}
+
+function routeForView(view) {
+  return VIEW_ROUTES[view] || "/";
+}
+
 // ---- Root ------------------------------------------------------------------
 export default function PidgeonUI() {
   const { pubkey, startLogin, logout } = useNostr();
-  const [view, setView] = useState("compose");
+  const [view, setView] = useState(() => getInitialViewFromLocation());
   const [jobsTab, setJobsTab] = useState("queue");
   const [editor, setEditor] = useState(emptyEditor);
   const [composerDraftId, setComposerDraftId] = useState("");
@@ -525,6 +576,24 @@ export default function PidgeonUI() {
       return false;
     }
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const url = new URL(window.location.href);
+      const currentPath = (String(url.pathname || "").replace(/\/+$/, "") || "/").toLowerCase();
+      const targetPath = routeForView(view);
+      const viewParam = normalizeViewName(url.searchParams.get(VIEW_PARAM));
+      const hashView = normalizeViewName(url.hash || "");
+
+      if (viewParam) url.searchParams.delete(VIEW_PARAM);
+      if (hashView) url.hash = "";
+      if (currentPath !== targetPath) url.pathname = targetPath;
+
+      const next = `${url.pathname}${url.search}${url.hash}`;
+      window.history.replaceState({}, "", next);
+    } catch {}
+  }, [view]);
   const [onboardingSnoozeUntil, setOnboardingSnoozeUntil] = useState(() => {
     try {
       const who = pubkey || "anon";
