@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pidgeon — How it works</title>
+    <meta http-equiv="refresh" content="0; url=/?view=how" />
+    <script>
+      (() => {
+        try {
+          const url = new URL(window.location.href);
+          url.pathname = "/";
+          url.searchParams.set("view", "how");
+          window.location.replace(url.toString());
+        } catch {
+          window.location.href = "/?view=how";
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <noscript>
+      <a href="/?view=how">Open “How it works”</a>
+    </noscript>
+  </body>
+</html>
