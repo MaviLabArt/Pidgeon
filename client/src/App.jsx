@@ -497,6 +497,44 @@ export default function PidgeonUI() {
   const [view, setView] = useState("compose");
   const [jobsTab, setJobsTab] = useState("queue");
   const [editor, setEditor] = useState(emptyEditor);
+  const [composerDraftId, setComposerDraftId] = useState("");
+  const [draftCleanupPrompt, setDraftCleanupPrompt] = useState(() => ({
+    open: false,
+    id: "",
+    preview: "",
+  }));
+  const ONBOARDING_SNOOZE_MS = 30 * 24 * 60 * 60 * 1000;
+  const onboardingKeys = useMemo(() => {
+    const who = pubkey || "anon";
+    return {
+      hiddenUser: `pidgeon.onboarding.hidden.${who}`,
+      snoozeUser: `pidgeon.onboarding.snoozeUntil.${who}`,
+      hiddenGlobal: "pidgeon.onboarding.hidden.global",
+      snoozeGlobal: "pidgeon.onboarding.snoozeUntil.global",
+    };
+  }, [pubkey]);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingHidden, setOnboardingHidden] = useState(() => {
+    try {
+      const who = pubkey || "anon";
+      return (
+        localStorage.getItem(`pidgeon.onboarding.hidden.${who}`) === "true" ||
+        localStorage.getItem("pidgeon.onboarding.hidden.global") === "true"
+      );
+    } catch {
+      return false;
+    }
+  });
+  const [onboardingSnoozeUntil, setOnboardingSnoozeUntil] = useState(() => {
+    try {
+      const who = pubkey || "anon";
+      const userUntil = Math.floor(Number(localStorage.getItem(`pidgeon.onboarding.snoozeUntil.${who}`) || 0));
+      const globalUntil = Math.floor(Number(localStorage.getItem("pidgeon.onboarding.snoozeUntil.global") || 0));
+      return Math.max(0, userUntil, globalUntil);
+    } catch {
+      return 0;
+    }
+  });
   const [charLimit] = useState(1000);
   const [now, setNow] = useState(new Date());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -846,6 +884,41 @@ export default function PidgeonUI() {
     } catch {}
   }, [analyticsEnabled]);
 
+  const snoozeOnboarding = useCallback(() => {
+    const until = Date.now() + ONBOARDING_SNOOZE_MS;
+    setOnboardingSnoozeUntil(until);
+    setOnboardingOpen(false);
+    try {
+      localStorage.setItem(onboardingKeys.snoozeUser, String(until));
+      localStorage.setItem(onboardingKeys.snoozeGlobal, String(until));
+    } catch {}
+  }, [ONBOARDING_SNOOZE_MS, onboardingKeys]);
+
+  const hideOnboardingForever = useCallback(() => {
+    setOnboardingHidden(true);
+    setOnboardingOpen(false);
+    try {
+      localStorage.setItem(onboardingKeys.hiddenUser, "true");
+      localStorage.setItem(onboardingKeys.hiddenGlobal, "true");
+    } catch {}
+  }, [onboardingKeys]);
+
+  useEffect(() => {
+    try {
+      const hidden =
+        localStorage.getItem(onboardingKeys.hiddenUser) === "true" ||
+        localStorage.getItem(onboardingKeys.hiddenGlobal) === "true";
+      const userUntil = Math.floor(Number(localStorage.getItem(onboardingKeys.snoozeUser) || 0));
+      const globalUntil = Math.floor(Number(localStorage.getItem(onboardingKeys.snoozeGlobal) || 0));
+      setOnboardingHidden(Boolean(hidden));
+      setOnboardingSnoozeUntil(Math.max(0, userUntil, globalUntil));
+    } catch {
+      setOnboardingHidden(false);
+      setOnboardingSnoozeUntil(0);
+    }
+    setOnboardingOpen(false);
+  }, [onboardingKeys]);
+
   useEffect(() => {
     const normalized = theme === "light" ? "light" : "dark";
     try {
@@ -898,6 +971,8 @@ export default function PidgeonUI() {
   useEffect(() => {
     let cancelled = false;
     // reload per-account persisted state (drafts/relays). Jobs are mailbox‑truth.
+    setComposerDraftId("");
+    setDraftCleanupPrompt({ open: false, id: "", preview: "" });
     setJobs([]);
     setMailboxCounts(null);
     setMailboxSync({ status: "idle", rev: 0, missing: 0 });
@@ -1079,6 +1154,40 @@ export default function PidgeonUI() {
       console.debug("[support] action publish failed", err?.message || err);
     }
   }, [pubkey]);
+
+  useEffect(() => {
+    if (onboardingOpen) return;
+    if (onboardingHidden) return;
+    if (view !== "compose") return;
+    if (
+      mobileMenuOpen ||
+      composeOptionsOpen ||
+      repostOpen ||
+      supportDialog.open ||
+      draftCleanupPrompt.open
+    )
+      return;
+    if (Date.now() < onboardingSnoozeUntil) return;
+    if ((Array.isArray(jobs) ? jobs.length : 0) > 0) return;
+    if ((Array.isArray(drafts) ? drafts.length : 0) > 0) return;
+    if (String(editor?.content || "").trim()) return;
+
+    const id = setTimeout(() => setOnboardingOpen(true), 650);
+    return () => clearTimeout(id);
+  }, [
+    onboardingOpen,
+    onboardingHidden,
+    onboardingSnoozeUntil,
+    view,
+    mobileMenuOpen,
+    composeOptionsOpen,
+    repostOpen,
+    supportDialog.open,
+    draftCleanupPrompt.open,
+    jobs,
+    drafts,
+    editor?.content,
+  ]);
 
   const copyText = useCallback(async (text) => {
     const t = String(text || "").trim();
@@ -1443,26 +1552,28 @@ export default function PidgeonUI() {
   };
 
   async function saveDraft() {
-    if (!editor.content.trim()) return showToast("Nothing to save");
-    if (!pubkey) return showToast("Login to save drafts");
+    if (!editor.content.trim()) return;
+    if (!pubkey) return;
     if (draftSaving) return;
     setDraftSaving(true);
     // Ensure local persistence is scoped to this pubkey even if drafts bootstrap is still running.
     draftsOwnerRef.current = pubkey;
+    const draftId = composerDraftId || ((typeof crypto !== "undefined" && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : (Math.random().toString(36).slice(2) + Date.now().toString(36)));
     const d = {
-      id: (typeof crypto !== "undefined" && crypto.randomUUID)
-        ? crypto.randomUUID()
-        : (Math.random().toString(36).slice(2) + Date.now().toString(36)),
+      id: draftId,
       content: editor.content,
       tags: editor.tags,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       eventId: ""
     };
-    setDrafts((prev) => [d, ...(Array.isArray(prev) ? prev : [])].slice(0, 200));
+    setComposerDraftId(draftId);
+    setDrafts((prev) => [d, ...(Array.isArray(prev) ? prev.filter((x) => x.id !== draftId) : [])].slice(0, 200));
     try {
       const saved = await saveDraftApi({
-        id: d.id,
+        id: draftId,
         pubkey,
         content: editor.content,
         tags: editor.tags,
@@ -1473,7 +1584,6 @@ export default function PidgeonUI() {
         setDrafts((prev) => [hydrated, ...prev.filter((x) => x.id !== hydrated.id)].slice(0, 200));
       }
       showToast("Draft saved");
-      setEditor({ content: "", tags: "", media: [] });
     } catch (err) {
       console.error("draft save failed", err);
       showToast("Failed to save draft");
@@ -1484,6 +1594,7 @@ export default function PidgeonUI() {
 
   function useDraft(d) {
     setEditor({ content: d.content, tags: d.tags, media: [] });
+    setComposerDraftId(String(d?.id || ""));
     showToast("Draft loaded");
     setView("compose");
     try {
@@ -1493,6 +1604,7 @@ export default function PidgeonUI() {
 
   function deleteDraft(id) {
     setDrafts((prev) => (Array.isArray(prev) ? prev.filter((d) => d.id !== id) : prev));
+    setComposerDraftId((prev) => (prev === id ? "" : prev));
     if (!pubkey) return;
     removeDraftApi(pubkey, id, activeRelays).catch((err) => {
       console.warn("draft delete failed", err?.message || err);
@@ -1529,6 +1641,7 @@ export default function PidgeonUI() {
     if (!pubkey || !window.nostr?.signEvent || !window.nostr?.nip44?.encrypt) {
       return showToast("Connect a Nostr signer first");
     }
+    const draftIdForCleanup = String(composerDraftId || "").trim();
     const isDemo = (() => {
       try {
         return Boolean(isDemoMailboxEnabled?.());
@@ -1585,6 +1698,11 @@ export default function PidgeonUI() {
         playScheduleSuccessSound();
         showToast("Scheduled ✨");
         setEditor({ content: "", tags: "", media: [] });
+        setComposerDraftId("");
+        if (draftIdForCleanup) {
+          const draftPreview = String(editor.content || "").trim().replace(/\s+/g, " ").slice(0, 160);
+          setDraftCleanupPrompt({ open: true, id: draftIdForCleanup, preview: draftPreview });
+        }
         setTimeout(() => setSchedulingStep(""), 1200);
         return;
       }
@@ -1636,6 +1754,11 @@ export default function PidgeonUI() {
       playScheduleSuccessSound();
       showToast("Scheduled via DVM ✨");
       setEditor({ content: "", tags: "", media: [] });
+      setComposerDraftId("");
+      if (draftIdForCleanup) {
+        const draftPreview = String(editor.content || "").trim().replace(/\s+/g, " ").slice(0, 160);
+        setDraftCleanupPrompt({ open: true, id: draftIdForCleanup, preview: draftPreview });
+      }
       setTimeout(() => setSchedulingStep(""), 2000);
     } catch (err) {
       console.error("[schedulePost] Schedule error", err);
@@ -3375,12 +3498,127 @@ export default function PidgeonUI() {
           </div>
         </footer>
 
-	      {/* Dialogs */}
+		      {/* Dialogs */}
+        <Dialog
+          open={onboardingOpen}
+          onOpenChange={(open) => {
+            if (open) return;
+            snoozeOnboarding();
+          }}
+        >
+          <DialogContent className="rounded-3xl sm:max-w-lg">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={snoozeOnboarding}
+                className="absolute right-3 top-3 rounded-xl p-2 text-white/60 transition hover:bg-white/5 hover:text-white"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+	              <DialogHeader>
+	                <DialogTitle>Welcome to Pidgeon</DialogTitle>
+	                <DialogDescription>
+	                  Schedule Nostr posts and DMs for later
+	                </DialogDescription>
+	              </DialogHeader>
+
+              <div className="space-y-3 px-6 pb-2">
+                <div className="rounded-2xl bg-slate-950/50 p-4 ring-1 ring-white/10">
+                  <div className="text-sm font-semibold text-white/90">How it works</div>
+                  <div className="mt-3 space-y-3 text-sm text-white/75">
+                    <div className="flex gap-3">
+                      <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80 ring-1 ring-white/10">
+                        1
+	                      </span>
+	                      <div className="min-w-0">
+	                        <div className="font-medium text-white/90">Login with Nostr</div>
+	                        <div className="mt-0.5 text-white/70">You can login via browser extension or remote signer</div>
+	                      </div>
+	                    </div>
+                    <div className="flex gap-3">
+                      <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80 ring-1 ring-white/10">
+                        2
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-medium text-white/90">Write, pick a time, schedule</div>
+                        <div className="mt-0.5 text-white/70">Save drafts anytime to back up what you’re writing.</div>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/80 ring-1 ring-white/10">
+                        3
+	                      </span>
+	                      <div className="min-w-0">
+	                        <div className="font-medium text-white/90">We will post it at your chosen time</div>
+	                        <div className="mt-0.5 text-white/70">
+	                          Sit back and relax. You can come back any time and cancel the scheduled post or reschedule the
+	                          posting time.
+	                        </div>
+	                      </div>
+	                    </div>
+	                  </div>
+	                </div>
+	              </div>
+
+	              <DialogFooter className="gap-2">
+	                <Button type="button" variant="outline" onClick={hideOnboardingForever}>
+	                  Don’t show this again
+	                </Button>
+                <Button type="button" onClick={snoozeOnboarding}>
+                  Continue
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+	        <Dialog
+	          open={draftCleanupPrompt.open}
+	          onOpenChange={(open) => {
+	            if (open) return;
+	            setDraftCleanupPrompt({ open: false, id: "", preview: "" });
+          }}
+        >
+          <DialogContent className="rounded-3xl sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Draft scheduled</DialogTitle>
+              <DialogDescription>
+                This was scheduled from a draft. Remove it from your drafts list?
+              </DialogDescription>
+            </DialogHeader>
+            {draftCleanupPrompt.preview ? (
+              <div className="rounded-2xl bg-slate-950/50 p-3 text-sm text-white/80 ring-1 ring-white/10">
+                {draftCleanupPrompt.preview}
+              </div>
+            ) : null}
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="outline" onClick={() => setDraftCleanupPrompt({ open: false, id: "", preview: "" })}>
+                Keep
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  const id = String(draftCleanupPrompt.id || "").trim();
+                  if (id) deleteDraft(id);
+                  setDraftCleanupPrompt({ open: false, id: "", preview: "" });
+                }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Trash2 className="h-4 w-4" />
+                  Remove draft
+                </span>
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
 	      <Dialog
 	        open={supportDialog.open}
 	        onOpenChange={(open) => {
 	          if (open) return;
-          handleSupportDialogAction(supportDialog.source === "mailbox" ? "maybe_later" : "close");
+	          handleSupportDialogAction(supportDialog.source === "mailbox" ? "maybe_later" : "close");
         }}
       >
         <DialogContent className="rounded-3xl sm:max-w-lg">
@@ -4107,6 +4345,14 @@ function ComposeView({
   useDraft,
 }) {
   const textareaRef = useRef(null);
+  const hasSigner = (() => {
+    try {
+      return Boolean(window?.nostr?.signEvent) && Boolean(window?.nostr?.nip44?.encrypt);
+    } catch {
+      return false;
+    }
+  })();
+  const composeLocked = !pubkey || !hasSigner;
 
   const insertEmoji = (emoji) => {
     if (!emoji) return;
@@ -4168,7 +4414,9 @@ function ComposeView({
     return { draftsCount: list.length, recentDrafts: list.slice(0, 3) };
   }, [drafts]);
 
-  const schedulingBusy = Boolean(schedulingStep) && !String(schedulingStep).startsWith("Scheduled for ");
+    const schedulingBusy = Boolean(schedulingStep) && !String(schedulingStep).startsWith("Scheduled for ");
+    const canSaveDraft = Boolean(pubkey) && Boolean(String(editor?.content || "").trim());
+    const canSchedule = Boolean(pubkey) && Boolean(hasSigner) && Boolean(String(editor?.content || "").trim());
   const canLoadMailbox = Boolean(pubkey);
   const mailboxBusy = mailboxSync?.status === "syncing" || mailboxSync?.status === "retrying";
   const queuedRemote = Number(mailboxCounts?.queued) || 0;
@@ -4194,19 +4442,61 @@ function ComposeView({
 
   return (
     <div className="space-y-8 lg:space-y-10">
+      <div className="rounded-3xl bg-slate-900/60 p-2 ring-1 ring-white/10 sm:p-3">
+        <div className="mb-1 px-1 text-[11px] font-semibold uppercase tracking-wide text-white/50">
+          Quick Status
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => onViewJobs && onViewJobs("queue")}
+            className="group flex items-center gap-2 rounded-2xl px-3 py-2 text-left transition hover:bg-white/5"
+          >
+            <CalendarClock className="h-4 w-4 text-indigo-200/80" />
+            <span className="text-xs font-medium text-white/70">Scheduled</span>
+            <span className="ml-auto font-mono text-sm font-semibold text-indigo-200">{scheduledCount}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onViewJobs && onViewJobs("posted")}
+            className="group flex items-center gap-2 rounded-2xl px-3 py-2 text-left transition hover:bg-white/5"
+          >
+            <CheckCircle className="h-4 w-4 text-emerald-200/80" />
+            <span className="text-xs font-medium text-white/70">Posted</span>
+            <span className="ps-quick-count ps-quick-count--posted ml-auto font-mono text-sm font-semibold text-emerald-200">
+              {postedCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onViewDrafts}
+            className="group flex items-center gap-2 rounded-2xl px-3 py-2 text-left transition hover:bg-white/5"
+          >
+            <FileText className="h-4 w-4 text-amber-200/80" />
+            <span className="text-xs font-medium text-white/70">Drafts</span>
+            <span className="ps-quick-count ps-quick-count--drafts ml-auto font-mono text-sm font-semibold text-amber-200">
+              {draftsCount}
+            </span>
+          </button>
+        </div>
+      </div>
+
       <div className="grid gap-6 lg:gap-8 lg:grid-cols-2 xl:grid-cols-[1.2fr_0.8fr]">
         <Card className={homeCardClass}>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Compose</CardTitle>
-            <CardDescription className="">Write your note. Uploads and DVM scheduling are live.</CardDescription>
+            <CardDescription className="">Write your note. You can schedule them to be posted at any time in the future!</CardDescription>
           </CardHeader>
         <CardContent className="space-y-4">
             <Textarea
               ref={textareaRef}
               value={editor.content}
               onChange={(e) => setEditor({ ...editor, content: e.target.value })}
-              placeholder="Type to schedule your thoughts on Nostr!"
+              placeholder={composeLocked ? "Login with Nostr first" : "Type to schedule your thoughts on Nostr!"}
               className="!min-h-[180px] resize-vertical"
+              disabled={composeLocked}
             />
           <div className="flex flex-wrap items-center gap-3">
             <Uploader
@@ -4259,6 +4549,7 @@ function ComposeView({
               onClick={onSaveDraft}
               loading={draftSaving}
               busyText="Saving draft…"
+              disabled={!canSaveDraft}
             >
               <span className="relative -top-px">Save Draft</span>
             </Button>
@@ -4267,6 +4558,7 @@ function ComposeView({
               loading={schedulingBusy}
               busyText={schedulingStep || "Scheduling…"}
               className="whitespace-nowrap"
+              disabled={!canSchedule}
             >
               <span className="inline-flex items-center gap-2 whitespace-nowrap">
                 <ScheduleSendIcon className="text-white/90" />
@@ -4363,55 +4655,6 @@ function ComposeView({
       </Dialog>
 
       </div>
-
-      {/* Quick Status */}
-      <Card className={homeCardClass}>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Quick Status</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <button
-              onClick={() => onViewJobs && onViewJobs('queue')}
-              className="group text-left rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10 transition-colors hover:bg-slate-950/80 hover:ring-white/20"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-sm font-medium text-white/70">Scheduled</span>
-                <span className="text-lg font-bold text-indigo-200 group-hover:scale-110 transition-transform">
-                  {scheduledCount}
-                </span>
-              </div>
-              <div className="text-xs text-white/50">Ready to post</div>
-            </button>
-
-	            <button
-	              onClick={() => onViewJobs && onViewJobs('posted')}
-	              className="group text-left rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10 transition-colors hover:bg-slate-950/80 hover:ring-white/20"
-	            >
-	              <div className="flex items-center justify-between mb-1">
-	                <span className="text-sm font-medium text-white/70">Posted</span>
-	                <span className="ps-quick-count ps-quick-count--posted text-lg font-bold text-emerald-200 group-hover:scale-110 transition-transform">
-	                  {postedCount}
-	                </span>
-	              </div>
-	              <div className="text-xs text-white/50">Published</div>
-	            </button>
-
-	            <button
-	              onClick={onViewDrafts}
-	              className="group text-left rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10 transition-colors hover:bg-slate-950/80 hover:ring-white/20"
-	            >
-	              <div className="flex items-center justify-between mb-1">
-	                <span className="text-sm font-medium text-white/70">Drafts</span>
-	                <span className="ps-quick-count ps-quick-count--drafts text-lg font-bold text-amber-200 group-hover:scale-110 transition-transform">
-	                  {draftsCount}
-	                </span>
-	              </div>
-	              <div className="text-xs text-white/50">Synced via relays</div>
-	            </button>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Upcoming Jobs, Recent Posts & Drafts */}
       <div className="grid gap-6 lg:gap-8 lg:grid-cols-2 xl:grid-cols-3">

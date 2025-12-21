@@ -99,11 +99,14 @@ function writeDemoDrafts(pubkey, drafts) {
 
 function seedDemoDrafts(pubkey) {
   const existing = readDemoDrafts(pubkey);
-  if (existing.length) return existing;
+  if (existing.length) {
+    const cleaned = existing.filter((d) => String(d?.tags || "").trim() !== "perf,testing");
+    if (cleaned.length !== existing.length) writeDemoDrafts(pubkey, cleaned);
+    if (cleaned.length) return cleaned;
+  }
 
   const pool = [
     { content: "Quick update: shipping a small UX tweak today. The goal is fewer clicks and a calmer flow.", tags: "ux,product" },
-    { content: "Testing mailbox fetching under load. If you notice jank, tell me where it happens and what device you’re on.", tags: "perf,testing" },
     { content: "Refactor day. No new features—just making future work safer and faster.", tags: "refactor,dev" },
     { content: "Tiny design polish: spacing, type scale, and a single accent color. Quiet confidence.", tags: "design,ui" },
     { content: "Local relay testing is underrated. Less noise, more signal.", tags: "local,nostr" },
