@@ -5,6 +5,8 @@ import { Readable } from "stream";
 import { mountClient } from "./serveClient.js";
 import { getPublicKey, nip19 } from "nostr-tools";
 
+const DEFAULT_NIP05_PUBKEY = "fb04b2aadb3cf9d3b97af52d3f544e1159ee1a4b8548334549d13b7cac4f8769";
+
 function parseNostrSecret(secret = "") {
   const raw = String(secret || "").trim();
   if (!raw) return null;
@@ -25,13 +27,7 @@ function parseNostrSecret(secret = "") {
 function getNip05MessengerPubkeyHex() {
   const override = String(process.env.NIP05_PUBKEY || "").trim();
   if (override) return override;
-  const secretBytes = parseNostrSecret(process.env.DVM_SECRET || "");
-  if (!secretBytes) return "";
-  try {
-    return getPublicKey(secretBytes);
-  } catch {
-    return "";
-  }
+  return DEFAULT_NIP05_PUBKEY;
 }
 
 function getNip05MessengerRelays() {

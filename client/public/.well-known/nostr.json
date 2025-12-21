@@ -1,9 +1,9 @@
 {
   "names": {
-    "messenger": "92f189bc51277fcd72ff4900bd6cf09eee19d4afaff87b5e6bdc910d417d24d1"
+    "messenger": "fb04b2aadb3cf9d3b97af52d3f544e1159ee1a4b8548334549d13b7cac4f8769"
   },
   "relays": {
-    "92f189bc51277fcd72ff4900bd6cf09eee19d4afaff87b5e6bdc910d417d24d1": [
+    "fb04b2aadb3cf9d3b97af52d3f544e1159ee1a4b8548334549d13b7cac4f8769": [
       "wss://nos.lol",
       "wss://relay.primal.net",
       "wss://nostr.mom",
