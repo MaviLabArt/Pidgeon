@@ -55,6 +55,7 @@ import {
   clearMasterKeyCache
 } from "@/nostr/dvm.js";
 import { fetchNip65WriteRelays } from "@/nostr/nip65.js";
+import { fetchUserMediaServers } from "@/nostr/mediaServers.js";
 import { fetchDrafts as fetchDraftsApi, saveDraft as saveDraftApi, removeDraft as removeDraftApi } from "@/services/drafts.js";
 import { isDemoMailboxEnabled } from "@/services/demoMailbox.js";
 import { fetchUserSettings as fetchUserSettingsApi, saveUserSettings as saveUserSettingsApi } from "@/services/userSettings.js";
@@ -492,6 +493,7 @@ const emptyEditor = {
   media: [],
 };
 const emptyUploads = [];
+const DEFAULT_NIP96_SERVICES = "https://nostr.build";
 const DEFAULT_BLOSSOM_SERVERS = [
   "https://blossom.yakihonne.com",
   "https://cdn.nostrcheck.me",
@@ -694,9 +696,9 @@ export default function PidgeonUI() {
   const readStored = (key, fallback) => readLocalJson(key, fallback);
   const [nip96Service, setNip96Service] = useState(() => {
     try {
-      return readLocalString("pidgeon.nip96", "https://nostr.build") || "https://nostr.build";
+      return readLocalString("pidgeon.nip96", DEFAULT_NIP96_SERVICES) || DEFAULT_NIP96_SERVICES;
     } catch {
-      return "https://nostr.build";
+      return DEFAULT_NIP96_SERVICES;
     }
   });
   const [uploadBackend, setUploadBackend] = useState(() => {
@@ -715,6 +717,37 @@ export default function PidgeonUI() {
       return stored === null ? DEFAULT_BLOSSOM_SERVERS : String(stored);
     } catch {
       return DEFAULT_BLOSSOM_SERVERS;
+    }
+  });
+  const [mediaServersMode, setMediaServersMode] = useState(() => {
+    try {
+      const stored = readLocalString("pidgeon.mediaServers.mode", "");
+      if (stored === "recommended" || stored === "custom" || stored === "my") return stored;
+
+      // Seamless upgrade path:
+      // - If user previously customized upload backend/servers, default to "custom".
+      // - Otherwise, default to "my" (auto-fetch kind:10063/10096).
+      const storedBackend = String(readLocalString("pidgeon.upload.backend", "") || "").trim();
+      const storedNip96 = String(readLocalString("pidgeon.nip96", DEFAULT_NIP96_SERVICES) || DEFAULT_NIP96_SERVICES).trim();
+      const storedBlossomRaw = localStorage.getItem("pidgeon.blossom.servers");
+      const storedBlossom = String(storedBlossomRaw === null ? DEFAULT_BLOSSOM_SERVERS : storedBlossomRaw).trim();
+
+      const backendIsDefault = !storedBackend || storedBackend === "nip96";
+      const nip96IsDefault = !storedNip96 || storedNip96 === DEFAULT_NIP96_SERVICES;
+      const blossomIsDefault = !storedBlossom || storedBlossom === DEFAULT_BLOSSOM_SERVERS;
+      const looksCustomized = !backendIsDefault || !nip96IsDefault || !blossomIsDefault;
+
+      return looksCustomized ? "custom" : "my";
+    } catch {
+      return "my";
+    }
+  });
+  const [mediaServersPrefer, setMediaServersPrefer] = useState(() => {
+    try {
+      const stored = readLocalString("pidgeon.mediaServers.prefer", "");
+      return stored === "nip96" || stored === "blossom" ? stored : "blossom";
+    } catch {
+      return "blossom";
     }
   });
   const [publishRelaysMode, setPublishRelaysMode] = useState(() => {
@@ -760,6 +793,15 @@ export default function PidgeonUI() {
     relays: [],
     error: "",
     loadedAt: 0
+  }));
+  const [nostrMediaServersState, setNostrMediaServersState] = useState(() => ({
+    status: "idle", // idle | loading | error
+    blossom: [],
+    nip96: [],
+    error: "",
+    loadedAt: 0,
+    blossomEventId: "",
+    nip96EventId: "",
   }));
   const [drafts, setDrafts] = useState([]);
   const draftsOwnerRef = useRef(pubkey || "");
@@ -810,12 +852,92 @@ export default function PidgeonUI() {
     () => resolveRelays(relays.filter((r) => r.enabled).map((r) => r.url)),
     [relays]
   );
+  const effectiveMediaUpload = useMemo(() => {
+    const mode = mediaServersMode === "recommended" || mediaServersMode === "custom" || mediaServersMode === "my" ? mediaServersMode : "my";
+
+    if (mode === "custom") {
+      return {
+        backend: uploadBackend === "nip96" ? "nip96" : "blossom",
+        nip96Service: String(nip96Service || "").trim(),
+        blossomServers: String(blossomServers || "").trim(),
+        note: "",
+        source: "custom",
+      };
+    }
+
+    if (mode === "recommended") {
+      return {
+        backend: "nip96",
+        nip96Service: DEFAULT_NIP96_SERVICES,
+        blossomServers: DEFAULT_BLOSSOM_SERVERS,
+        note: "",
+        source: "recommended",
+      };
+    }
+
+    const blossom = Array.isArray(nostrMediaServersState.blossom) ? nostrMediaServersState.blossom : [];
+    const nip96 = Array.isArray(nostrMediaServersState.nip96) ? nostrMediaServersState.nip96 : [];
+    const prefer = mediaServersPrefer === "nip96" ? "nip96" : "blossom";
+
+    const hasBlossom = blossom.length > 0;
+    const hasNip96 = nip96.length > 0;
+
+    if (prefer === "nip96" && hasNip96) {
+      return {
+        backend: "nip96",
+        nip96Service: nip96.join("\n"),
+        blossomServers: DEFAULT_BLOSSOM_SERVERS,
+        note: "",
+        source: "nip96",
+      };
+    }
+
+    if (hasBlossom) {
+      return {
+        backend: "blossom",
+        nip96Service: DEFAULT_NIP96_SERVICES,
+        blossomServers: blossom.join("\n"),
+        note: prefer === "nip96" && !hasNip96 ? "No NIP-96 servers found; using Blossom." : "",
+        source: "blossom",
+      };
+    }
+
+    if (hasNip96) {
+      return {
+        backend: "nip96",
+        nip96Service: nip96.join("\n"),
+        blossomServers: DEFAULT_BLOSSOM_SERVERS,
+        note: prefer === "blossom" && !hasBlossom ? "No Blossom servers found; using NIP-96." : "",
+        source: "nip96",
+      };
+    }
+
+    return {
+      backend: "nip96",
+      nip96Service: DEFAULT_NIP96_SERVICES,
+      blossomServers: DEFAULT_BLOSSOM_SERVERS,
+      note: "No server list found; using recommended.",
+      source: "recommended",
+    };
+  }, [
+    mediaServersMode,
+    mediaServersPrefer,
+    nostrMediaServersState.blossom,
+    nostrMediaServersState.nip96,
+    uploadBackend,
+    nip96Service,
+    blossomServers,
+  ]);
   const localSettings = useMemo(
     () => ({
       ...(theme === "light" ? { theme: "light" } : {}),
       uploadBackend: uploadBackend === "nip96" ? "nip96" : "blossom",
       nip96Service: String(nip96Service || "").trim(),
       blossomServers: String(blossomServers || "").trim(),
+      mediaServers: {
+        mode: mediaServersMode,
+        prefer: mediaServersPrefer,
+      },
       analyticsEnabled: Boolean(analyticsEnabled),
       publishRelays: {
         mode: publishRelaysMode,
@@ -829,7 +951,7 @@ export default function PidgeonUI() {
         return { dvm: { pubkey: pk, relays } };
       })(),
     }),
-    [theme, uploadBackend, nip96Service, blossomServers, analyticsEnabled, publishRelaysMode, publishRelaysCustom, supportInvoiceSats, dvmPubkeyOverride, dvmRelaysOverride]
+    [theme, uploadBackend, nip96Service, blossomServers, mediaServersMode, mediaServersPrefer, analyticsEnabled, publishRelaysMode, publishRelaysCustom, supportInvoiceSats, dvmPubkeyOverride, dvmRelaysOverride]
   );
   const settingsDirty = useMemo(() => {
     const remote = settingsSync.remote;
@@ -1023,6 +1145,16 @@ export default function PidgeonUI() {
       localStorage.setItem("pidgeon.blossom.servers", blossomServers);
     } catch {}
   }, [blossomServers]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("pidgeon.mediaServers.mode", mediaServersMode);
+    } catch {}
+  }, [mediaServersMode]);
+  useEffect(() => {
+    try {
+      localStorage.setItem("pidgeon.mediaServers.prefer", mediaServersPrefer);
+    } catch {}
+  }, [mediaServersPrefer]);
   useEffect(() => {
     try {
       localStorage.setItem("pidgeon.publishRelays.mode", publishRelaysMode);
@@ -1441,6 +1573,16 @@ export default function PidgeonUI() {
       const t = String(next.theme || "").trim().toLowerCase();
       if (t === "light" || t === "dark") setThemePreference(t);
     }
+    const mediaServers = next.mediaServers && typeof next.mediaServers === "object" ? next.mediaServers : null;
+    if (mediaServers) {
+      const mode = String(mediaServers.mode || "").trim();
+      setMediaServersMode(mode === "recommended" || mode === "custom" || mode === "my" ? mode : "my");
+      const prefer = String(mediaServers.prefer || "").trim();
+      setMediaServersPrefer(prefer === "nip96" || prefer === "blossom" ? prefer : "blossom");
+    } else if (next.uploadBackend || next.nip96Service || next.blossomServers) {
+      // Backwards compatibility: older settings used explicit backend + server fields.
+      setMediaServersMode("custom");
+    }
     if (next.uploadBackend === "nip96" || next.uploadBackend === "blossom") {
       setUploadBackend(next.uploadBackend);
     }
@@ -1493,6 +1635,41 @@ export default function PidgeonUI() {
     if (publishRelaysMode !== "nip65") return;
     refreshNip65PublishRelays();
   }, [pubkey, publishRelaysMode, refreshNip65PublishRelays]);
+
+  const refreshNostrMediaServers = useCallback(async () => {
+    if (!pubkey) return;
+    setNostrMediaServersState((prev) => ({ ...prev, status: "loading", error: "" }));
+    try {
+      const seedRelays = Array.from(new Set([...(recommendedPublishRelays || []), ...(activeRelays || [])])).filter(Boolean);
+      const res = await fetchUserMediaServers({ pubkey, relays: seedRelays });
+      setNostrMediaServersState({
+        status: "idle",
+        blossom: Array.isArray(res?.blossom) ? res.blossom : [],
+        nip96: Array.isArray(res?.nip96) ? res.nip96 : [],
+        error: "",
+        loadedAt: Date.now(),
+        blossomEventId: String(res?.blossomEvent?.id || ""),
+        nip96EventId: String(res?.nip96Event?.id || ""),
+      });
+    } catch (err) {
+      const msg = String(err?.message || err || "Failed to load server list").trim();
+      setNostrMediaServersState({
+        status: "error",
+        blossom: [],
+        nip96: [],
+        error: msg,
+        loadedAt: Date.now(),
+        blossomEventId: "",
+        nip96EventId: "",
+      });
+    }
+  }, [pubkey, activeRelays, recommendedPublishRelays]);
+
+  useEffect(() => {
+    if (!pubkey) return;
+    if (mediaServersMode !== "my") return;
+    refreshNostrMediaServers();
+  }, [pubkey, mediaServersMode, refreshNostrMediaServers]);
 
   const loadUserSettingsFromNostr = async ({ silent = false } = {}) => {
     if (!pubkey) {
@@ -3402,9 +3579,9 @@ export default function PidgeonUI() {
 	              onOpenPreview={openJobPreview}
 	              onCancelJob={cancelJob}
 	              useDraft={useDraft}
-	              nip96Service={nip96Service}
-	              uploadBackend={uploadBackend}
-	              blossomServers={blossomServers}
+	              nip96Service={effectiveMediaUpload.nip96Service}
+	              uploadBackend={effectiveMediaUpload.backend}
+	              blossomServers={effectiveMediaUpload.blossomServers}
 	              nsfw={nsfw}
 	              setNsfw={setNsfw}
 		              optionsOpen={composeOptionsOpen}
@@ -3444,9 +3621,9 @@ export default function PidgeonUI() {
                 onUpdateEvent={handleCalendarUpdate}
                 onDeleteEvent={handleCalendarDelete}
                 pubkey={pubkey}
-                nip96Service={nip96Service}
-                uploadBackend={uploadBackend}
-                blossomServers={blossomServers}
+                nip96Service={effectiveMediaUpload.nip96Service}
+                uploadBackend={effectiveMediaUpload.backend}
+                blossomServers={effectiveMediaUpload.blossomServers}
                 uploads={uploads}
                 onUploadStart={handleUploadStart}
                 onUploadProgress={handleUploadProgress}
@@ -3525,6 +3702,18 @@ export default function PidgeonUI() {
                 setUploadBackend={setUploadBackend}
                 blossomServers={blossomServers}
                 setBlossomServers={setBlossomServers}
+                mediaServersMode={mediaServersMode}
+                setMediaServersMode={setMediaServersMode}
+                mediaServersPrefer={mediaServersPrefer}
+                setMediaServersPrefer={setMediaServersPrefer}
+                recommendedNip96Services={DEFAULT_NIP96_SERVICES}
+                recommendedBlossomServers={DEFAULT_BLOSSOM_SERVERS}
+                nostrMediaServersBlossom={nostrMediaServersState.blossom}
+                nostrMediaServersNip96={nostrMediaServersState.nip96}
+                nostrMediaServersStatus={nostrMediaServersState.status}
+                nostrMediaServersError={nostrMediaServersState.error}
+                onRefreshNostrMediaServers={refreshNostrMediaServers}
+                effectiveMediaUpload={effectiveMediaUpload}
                 publishRelaysMode={publishRelaysMode}
                 setPublishRelaysMode={setPublishRelaysMode}
                 publishRelaysCustom={publishRelaysCustom}

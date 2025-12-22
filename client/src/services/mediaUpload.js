@@ -40,6 +40,28 @@ function parseBlossomServers(input) {
     .filter(Boolean);
 }
 
+function normalizeNip96Service(input) {
+  const trimmed = String(input || "").trim();
+  if (!trimmed) return "";
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const url = new URL(withScheme);
+    if (url.username || url.password) return "";
+    if (!["https:", "http:"].includes(url.protocol)) return "";
+    return url.origin;
+  } catch {
+    return "";
+  }
+}
+
+function parseNip96Services(input) {
+  if (Array.isArray(input)) return input.map(normalizeNip96Service).filter(Boolean);
+  return String(input || "")
+    .split(/[\n,]/)
+    .map((s) => normalizeNip96Service(s))
+    .filter(Boolean);
+}
+
 function extractTagValue(tags, key) {
   return (
     tags.find((t) => Array.isArray(t) && t[0] === key && typeof t[1] === "string")?.[1] || ""
@@ -158,34 +180,46 @@ function requestWithXhr(method, targetUrl, { body, auth, signal, onProgress, hea
 async function uploadViaNip96(file, { onProgress, signal, serviceUrl } = {}) {
   if (signal?.aborted) throw new Error(UPLOAD_ABORTED_ERROR_MSG);
 
-  const uploadUrl = await resolveServiceUrl(serviceUrl);
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const auth = await signNip98Auth(uploadUrl, "POST", signal);
-  const proxyUrl = absoluteApiUrl("/api/nip96/upload");
-  const proxyHeaders = {
-    "x-nip96-target": uploadUrl,
-    "x-nip96-service": serviceUrl,
-  };
+  const services = parseNip96Services(serviceUrl || "https://nostr.build");
+  if (!services.length) throw new Error("No NIP-96 services configured");
 
   let lastError = null;
+  for (const baseService of services) {
+    let proxyError = null;
+    try {
+      const uploadUrl = await resolveServiceUrl(baseService);
+      const formData = new FormData();
+      formData.append("file", file);
 
-  try {
-    const data = await requestWithXhr("POST", proxyUrl, { body: formData, auth, signal, onProgress, headers: proxyHeaders });
-    return parseUploadResponse(data, { fallbackMime: file?.type, fallbackSize: file?.size });
-  } catch (err) {
-    if (err?.message === UPLOAD_ABORTED_ERROR_MSG) throw err;
-    lastError = err;
+      const auth = await signNip98Auth(uploadUrl, "POST", signal);
+      const proxyUrl = absoluteApiUrl("/api/nip96/upload");
+      const proxyHeaders = {
+        "x-nip96-target": uploadUrl,
+        "x-nip96-service": baseService,
+      };
+
+      try {
+        const data = await requestWithXhr("POST", proxyUrl, { body: formData, auth, signal, onProgress, headers: proxyHeaders });
+        return parseUploadResponse(data, { fallbackMime: file?.type, fallbackSize: file?.size });
+      } catch (err) {
+        if (err?.message === UPLOAD_ABORTED_ERROR_MSG) throw err;
+        proxyError = err;
+      }
+
+      try {
+        const data = await requestWithXhr("POST", uploadUrl, { body: formData, auth, signal, onProgress });
+        return parseUploadResponse(data, { fallbackMime: file?.type, fallbackSize: file?.size });
+      } catch (err) {
+        if (err?.message === UPLOAD_ABORTED_ERROR_MSG) throw err;
+        lastError = proxyError || err;
+      }
+    } catch (err) {
+      if (err?.message === UPLOAD_ABORTED_ERROR_MSG) throw err;
+      lastError = err;
+    }
   }
 
-  return requestWithXhr("POST", uploadUrl, { body: formData, auth, signal, onProgress })
-    .then((data) => parseUploadResponse(data, { fallbackMime: file?.type, fallbackSize: file?.size }))
-    .catch((err) => {
-    if (err?.message === UPLOAD_ABORTED_ERROR_MSG) throw err;
-    throw lastError || err;
-  });
+  throw lastError || new Error("Upload failed");
 }
 
 async function sha256HexOfFile(file, signal) {

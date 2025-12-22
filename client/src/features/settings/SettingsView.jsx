@@ -33,12 +33,24 @@ function isHexPubkey(value) {
 export function SettingsView({
   theme = "dark",
   setTheme,
+  mediaServersMode = "my",
+  setMediaServersMode,
+  mediaServersPrefer = "blossom",
+  setMediaServersPrefer,
   nip96Service,
   setNip96Service,
   uploadBackend,
   setUploadBackend,
   blossomServers,
   setBlossomServers,
+  recommendedNip96Services = "https://nostr.build",
+  recommendedBlossomServers = "",
+  nostrMediaServersBlossom = [],
+  nostrMediaServersNip96 = [],
+  nostrMediaServersStatus = "idle",
+  nostrMediaServersError = "",
+  onRefreshNostrMediaServers,
+  effectiveMediaUpload,
   publishRelaysMode,
   setPublishRelaysMode,
   publishRelaysCustom,
@@ -114,6 +126,54 @@ export function SettingsView({
     return "";
   })();
 
+  const normalizeHttpOrigin = (input) => {
+    const trimmed = String(input || "").trim();
+    if (!trimmed) return "";
+    const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    try {
+      const url = new URL(withScheme);
+      if (url.username || url.password) return "";
+      if (!["https:", "http:"].includes(url.protocol)) return "";
+      return url.origin;
+    } catch {
+      return "";
+    }
+  };
+
+  const parseServerList = (input, { max = 20 } = {}) => {
+    const lines = String(input || "")
+      .split(/[\n,]/)
+      .map((s) => normalizeHttpOrigin(s))
+      .filter(Boolean);
+    const seen = new Set();
+    const servers = [];
+    for (const s of lines) {
+      if (seen.has(s)) continue;
+      seen.add(s);
+      servers.push(s);
+    }
+    return servers.slice(0, max);
+  };
+
+  const recommendedNip96List = React.useMemo(
+    () => parseServerList(recommendedNip96Services, { max: 20 }),
+    [recommendedNip96Services]
+  );
+  const customNip96List = React.useMemo(() => parseServerList(nip96Service, { max: 20 }), [nip96Service]);
+  const customBlossomList = React.useMemo(() => parseServerList(blossomServers, { max: 20 }), [blossomServers]);
+  const nostrBlossomList = React.useMemo(
+    () => Array.from(new Set((Array.isArray(nostrMediaServersBlossom) ? nostrMediaServersBlossom : []).filter(Boolean))),
+    [nostrMediaServersBlossom]
+  );
+  const nostrNip96List = React.useMemo(
+    () => Array.from(new Set((Array.isArray(nostrMediaServersNip96) ? nostrMediaServersNip96 : []).filter(Boolean))),
+    [nostrMediaServersNip96]
+  );
+  const hasNostrBlossom = nostrBlossomList.length > 0;
+  const hasNostrNip96 = nostrNip96List.length > 0;
+  const effectiveUploadBackend = String(effectiveMediaUpload?.backend || "").trim() || "nip96";
+  const effectiveNote = String(effectiveMediaUpload?.note || "").trim();
+
   const dvmRelaysPreview = React.useMemo(
     () => parseRelayListText(dvmRelaysOverride || "", { max: 20, allowWs: true }),
     [dvmRelaysOverride]
@@ -166,38 +226,280 @@ export function SettingsView({
               <HelpCircle className="mr-2 h-4 w-4" /> Open
             </Button>
           </div>
-	        </div>
-
-	        <div className="rounded-2xl bg-slate-950/60 p-3 ring-1 ring-white/10 space-y-2">
-	          <div className="text-sm font-medium">Media Upload Backend</div>
-	          <select
-	            value={uploadBackend}
-            onChange={(e) => setUploadBackend(e.target.value)}
-            className="h-11 w-full rounded-2xl bg-slate-950 px-4 text-sm text-white ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          >
-            <option value="nip96">NIP-96</option>
-            <option value="blossom">Blossom</option>
-          </select>
-          <div className="text-[11px] text-white/60">Choose how media uploads are performed.</div>
         </div>
 
-        <div className="rounded-2xl bg-slate-950/60 p-3 ring-1 ring-white/10 space-y-2">
-          <div className="text-sm font-medium">Blossom servers</div>
-          <Textarea
-            value={blossomServers}
-            onChange={(e) => setBlossomServers(e.target.value)}
-            className="!min-h-[96px]"
-            placeholder={"https://blossom.example\nhttps://cdn.blossom.example"}
-          />
-          <div className="text-[11px] text-white/60">
-            Required when upload backend is Blossom (one per line, tried in order).
+        <div className="rounded-2xl bg-slate-950/60 p-3 ring-1 ring-white/10 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">Media servers</div>
+            <Tooltip
+              content={
+                <div className="max-w-[260px]">
+                  Pidgeon can upload media using either NIP-96 (file servers) or Blossom (BUD-03). When available, your
+                  server lists are pulled from kind:10096 and kind:10063.
+                </div>
+              }
+            >
+              <button type="button" className="text-xs text-white/50 hover:text-white/80">
+                What’s this?
+              </button>
+            </Tooltip>
           </div>
-        </div>
 
-        <div className="rounded-2xl bg-slate-950/60 p-3 ring-1 ring-white/10 space-y-2">
-          <div className="text-sm font-medium">NIP-96 upload service</div>
-          <Input value={nip96Service} onChange={(e) => setNip96Service(e.target.value)} placeholder="https://nostr.build" />
-          <div className="text-[11px] text-white/60">Used when upload backend is NIP-96 (requires Nostr signer).</div>
+          <div className="grid gap-2">
+            <label className="flex items-start gap-3 rounded-2xl bg-slate-900 p-3 ring-1 ring-white/10">
+              <input
+                type="radio"
+                name="mediaServersMode"
+                value="my"
+                checked={mediaServersMode === "my"}
+                onChange={() => setMediaServersMode?.("my")}
+                className="mt-1"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium">My servers (kinds 10063/10096) (default)</div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onRefreshNostrMediaServers?.()}
+                    disabled={!pubkey || nostrMediaServersStatus === "loading"}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+                <div className="text-xs text-white/60">
+                  Uses your Blossom list (kind:10063) or NIP-96 list (kind:10096). Blossom is preferred when both exist.
+                </div>
+
+                {nostrMediaServersStatus === "loading" && <div className="mt-2 text-[11px] text-white/50">Loading…</div>}
+                {nostrMediaServersError ? <div className="mt-2 text-[11px] text-red-200">{nostrMediaServersError}</div> : null}
+                {!pubkey ? (
+                  <div className="mt-2 text-[11px] text-white/50">Connect a signer to load your server lists.</div>
+                ) : null}
+
+                {mediaServersMode === "my" && (hasNostrBlossom || hasNostrNip96) ? (
+                  <div className="mt-2 space-y-2">
+                    {hasNostrBlossom && hasNostrNip96 ? (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setMediaServersPrefer?.("blossom")}
+                          className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
+                            mediaServersPrefer !== "nip96"
+                              ? "bg-emerald-500/15 text-emerald-100 ring-emerald-400/30"
+                              : "bg-white/5 text-white/70 ring-white/10 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          Blossom (10063)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMediaServersPrefer?.("nip96")}
+                          className={`rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
+                            mediaServersPrefer === "nip96"
+                              ? "bg-indigo-500/15 text-indigo-100 ring-indigo-400/30"
+                              : "bg-white/5 text-white/70 ring-white/10 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          NIP-96 (10096)
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div
+                        className={`rounded-2xl bg-slate-950/50 p-3 ring-1 ${
+                          effectiveUploadBackend === "blossom" ? "ring-emerald-400/20" : "ring-white/10"
+                        }`}
+                      >
+                        <div className="text-[11px] text-white/60">Blossom (kind:10063)</div>
+                        <div className="mt-2 max-h-40 space-y-1 overflow-auto font-mono text-[11px] text-white/80">
+                          {hasNostrBlossom ? (
+                            nostrBlossomList.map((url) => (
+                              <div key={url} className="break-all">
+                                {url}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-white/50">Not found</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div
+                        className={`rounded-2xl bg-slate-950/50 p-3 ring-1 ${
+                          effectiveUploadBackend === "nip96" ? "ring-indigo-400/20" : "ring-white/10"
+                        }`}
+                      >
+                        <div className="text-[11px] text-white/60">NIP-96 (kind:10096)</div>
+                        <div className="mt-2 max-h-40 space-y-1 overflow-auto font-mono text-[11px] text-white/80">
+                          {hasNostrNip96 ? (
+                            nostrNip96List.map((url) => (
+                              <div key={url} className="break-all">
+                                {url}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-white/50">Not found</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {effectiveNote ? <div className="text-[11px] text-white/60">{effectiveNote}</div> : null}
+                  </div>
+                ) : null}
+
+                {mediaServersMode === "my" && pubkey && !hasNostrBlossom && !hasNostrNip96 && nostrMediaServersStatus !== "loading" ? (
+                  <div className="mt-2 text-[11px] text-white/60">
+                    No kind:10063 or kind:10096 found yet; falling back to recommended.
+                  </div>
+                ) : null}
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 rounded-2xl bg-slate-900 p-3 ring-1 ring-white/10">
+              <input
+                type="radio"
+                name="mediaServersMode"
+                value="recommended"
+                checked={mediaServersMode === "recommended"}
+                onChange={() => setMediaServersMode?.("recommended")}
+                className="mt-1"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">Recommended</div>
+                <div className="text-xs text-white/60">Uses a default NIP-96 service (fastest setup).</div>
+                {mediaServersMode === "recommended" && (
+                  <div className="mt-2 rounded-2xl bg-slate-950/50 p-3 ring-1 ring-white/10">
+                    <div className="text-[11px] text-white/60">Will upload via NIP-96</div>
+                    <div className="mt-2 max-h-40 space-y-1 overflow-auto font-mono text-[11px] text-white/80">
+                      {(recommendedNip96List.length ? recommendedNip96List : [recommendedNip96Services]).map((url) => (
+                        <div key={url} className="break-all">
+                          {url}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 rounded-2xl bg-slate-900 p-3 ring-1 ring-white/10">
+              <input
+                type="radio"
+                name="mediaServersMode"
+                value="custom"
+                checked={mediaServersMode === "custom"}
+                onChange={() => setMediaServersMode?.("custom")}
+                className="mt-1"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">Custom</div>
+                <div className="text-xs text-white/60">Bring your own servers.</div>
+                {mediaServersMode === "custom" && (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="text-[11px] text-white/60">Upload via</div>
+                      <select
+                        value={uploadBackend}
+                        onChange={(e) => setUploadBackend?.(e.target.value)}
+                        className="h-9 rounded-xl bg-slate-950 px-3 text-xs text-white ring-1 ring-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      >
+                        <option value="nip96">NIP-96</option>
+                        <option value="blossom">Blossom</option>
+                      </select>
+                    </div>
+
+                    {uploadBackend === "blossom" ? (
+                      <>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-[11px] text-white/60">Blossom servers (one per line)</div>
+                          {recommendedBlossomServers ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setBlossomServers?.(recommendedBlossomServers)}
+                            >
+                              Use defaults
+                            </Button>
+                          ) : null}
+                        </div>
+                        <Textarea
+                          value={blossomServers}
+                          onChange={(e) => setBlossomServers?.(e.target.value)}
+                          className="!min-h-[96px]"
+                          placeholder={"https://blossom.example\nhttps://cdn.blossom.example"}
+                        />
+                        <div className="rounded-2xl bg-slate-950/50 p-3 ring-1 ring-white/10">
+                          <div className="text-[11px] text-white/60">
+                            {customBlossomList.length ? "Will upload via Blossom to" : "Add at least one Blossom server"}
+                          </div>
+                          <div className="mt-2 max-h-40 space-y-1 overflow-auto font-mono text-[11px] text-white/80">
+                            {customBlossomList.length ? (
+                              customBlossomList.map((url) => (
+                                <div key={url} className="break-all">
+                                  {url}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-white/50">No servers configured</div>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-[11px] text-white/60">NIP-96 servers (one per line)</div>
+                          {recommendedNip96Services ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setNip96Service?.(recommendedNip96Services)}
+                            >
+                              Use defaults
+                            </Button>
+                          ) : null}
+                        </div>
+                        <Textarea
+                          value={nip96Service}
+                          onChange={(e) => setNip96Service?.(e.target.value)}
+                          className="!min-h-[96px]"
+                          placeholder={"https://nostr.build\nhttps://file.server.one"}
+                        />
+                        <div className="rounded-2xl bg-slate-950/50 p-3 ring-1 ring-white/10">
+                          <div className="text-[11px] text-white/60">
+                            {customNip96List.length ? "Will upload via NIP-96 to" : "Add at least one NIP-96 server"}
+                          </div>
+                          <div className="mt-2 max-h-40 space-y-1 overflow-auto font-mono text-[11px] text-white/80">
+                            {customNip96List.length ? (
+                              customNip96List.map((url) => (
+                                <div key={url} className="break-all">
+                                  {url}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-white/50">No servers configured</div>
+                            )}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </label>
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={() => setMediaServersMode?.("recommended")}>
+              Reset to recommended
+            </Button>
+          </div>
         </div>
 
         <div className="rounded-2xl bg-slate-950/60 p-3 ring-1 ring-white/10 space-y-3">

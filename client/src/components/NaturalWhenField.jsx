@@ -121,6 +121,11 @@ export function NaturalWhenField({
           onClick={applyPreview}
           disabled={!canApply || disabled}
           title={canApply ? "Apply parsed time" : "Type a valid time first"}
+          className={cn(
+            canApply &&
+              !disabled &&
+              "bg-emerald-500/25 text-emerald-50 ring-2 ring-emerald-400/50 shadow-[0_0_0_4px_rgba(16,185,129,0.12)] hover:bg-emerald-500/35 hover:ring-emerald-300/70"
+          )}
         >
           <Check className="h-4 w-4" />
         </Button>
@@ -132,7 +137,7 @@ export function NaturalWhenField({
             <Clock className="h-3.5 w-3.5 opacity-60" />
             <span className="text-white/80">{formatPreview(preview.date)}</span>
             <span className="text-white/50">({formatRelative(preview.date, new Date())})</span>
-            <span className="text-white/40">Press Enter</span>
+            <span className="text-white/40">Tap ✓ or press Enter</span>
           </div>
         ) : (
           <div className="text-[11px] text-red-300">{preview?.error || "Couldn’t parse that."}</div>

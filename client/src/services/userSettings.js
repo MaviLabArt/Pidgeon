@@ -82,6 +82,24 @@ function normalizePublishRelays(input) {
   return { mode, custom };
 }
 
+function normalizeMediaServersMode(input) {
+  const mode = String(input || "").trim();
+  if (mode === "recommended" || mode === "my" || mode === "custom") return mode;
+  // Backwards compatible default: older versions used explicit backend + server fields.
+  return "custom";
+}
+
+function normalizeMediaServersPrefer(input) {
+  return String(input || "").trim() === "nip96" ? "nip96" : "blossom";
+}
+
+function normalizeMediaServers(input) {
+  const v = input && typeof input === "object" ? input : {};
+  const mode = normalizeMediaServersMode(v.mode);
+  const prefer = normalizeMediaServersPrefer(v.prefer);
+  return { mode, prefer };
+}
+
 function normalizeDvm(input) {
   const v = input && typeof input === "object" ? input : null;
   if (!v) return null;
@@ -111,6 +129,7 @@ function buildPayload(settings) {
     uploadBackend: normalizeUploadBackend(settings?.uploadBackend),
     nip96Service: normalizeText(settings?.nip96Service).trim(),
     blossomServers: normalizeText(settings?.blossomServers).trim(),
+    mediaServers: normalizeMediaServers(settings?.mediaServers),
     analyticsEnabled: Boolean(settings?.analyticsEnabled),
     publishRelays: normalizePublishRelays(settings?.publishRelays),
     supportInvoiceSats: normalizeSupportInvoiceSats(settings?.supportInvoiceSats),
@@ -133,6 +152,7 @@ function parsePayload(raw) {
     uploadBackend: normalizeUploadBackend(parsed.uploadBackend),
     nip96Service: normalizeText(parsed.nip96Service).trim(),
     blossomServers: normalizeText(parsed.blossomServers).trim(),
+    mediaServers: normalizeMediaServers(parsed.mediaServers),
     analyticsEnabled: Boolean(parsed.analyticsEnabled),
     publishRelays: normalizePublishRelays(parsed.publishRelays),
     supportInvoiceSats: normalizeSupportInvoiceSats(parsed.supportInvoiceSats),

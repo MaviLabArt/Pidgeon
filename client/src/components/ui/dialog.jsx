@@ -22,20 +22,22 @@ export function DialogContent({ className, children, ...props }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm"
       onClick={() => onOpenChange(false)}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
-        className={cn(
-          "w-full max-w-lg rounded-3xl bg-slate-900 text-white ring-1 ring-white/10 shadow-2xl",
-          className
-        )}
-        onClick={(e) => e.stopPropagation()}
-        {...props}
-      >
-        {children}
+      <div className="min-h-full px-4 py-6 flex items-start justify-center sm:items-center">
+        <div
+          role="dialog"
+          aria-modal="true"
+          className={cn(
+            "w-full max-w-lg rounded-3xl bg-slate-900 text-white ring-1 ring-white/10 shadow-2xl",
+            className
+          )}
+          onClick={(e) => e.stopPropagation()}
+          {...props}
+        >
+          {children}
+        </div>
       </div>
     </div>,
     document.body
