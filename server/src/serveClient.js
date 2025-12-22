@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = process.env.CLIENT_DIST || path.resolve(__dirname, "../../client/dist");
 const clientIndex = path.join(clientDist, "index.html");
 let warnedMissingClient = false;
+let clientSendFileErrorCount = 0;
 
 function hasBuiltClient() {
   try {
@@ -15,6 +16,75 @@ function hasBuiltClient() {
   } catch {
     return false;
   }
+}
+
+function safeStat(filePath) {
+  try {
+    const st = fs.statSync(filePath);
+    return {
+      ok: true,
+      isFile: st.isFile(),
+      isDir: st.isDirectory(),
+      size: Number(st.size) || 0,
+      mtimeMs: Number(st.mtimeMs) || 0,
+    };
+  } catch (err) {
+    return { ok: false, error: err?.code || err?.message || String(err) };
+  }
+}
+
+function safeListDir(dirPath, limit = 20) {
+  try {
+    return fs.readdirSync(dirPath).slice(0, Math.max(0, Number(limit) || 0));
+  } catch {
+    return null;
+  }
+}
+
+function logSendFileFailure(req, err, { fallback } = {}) {
+  clientSendFileErrorCount += 1;
+  const summary = `[client] Failed to serve ${clientIndex}: ${err?.message || err}`;
+  // Avoid spamming logs with huge debug blobs if something is seriously wrong.
+  if (clientSendFileErrorCount > 5) {
+    console.warn(summary, fallback ? { fallback } : undefined);
+    return;
+  }
+
+  const assetsDir = path.join(clientDist, "assets");
+  console.warn(summary, {
+    count: clientSendFileErrorCount,
+    at: new Date().toISOString(),
+    request: {
+      method: req?.method,
+      url: req?.originalUrl || req?.url,
+      accept: req?.headers?.accept,
+      userAgent: req?.headers?.["user-agent"],
+    },
+    client: {
+      envClientDist: process.env.CLIENT_DIST || "",
+      clientDist,
+      clientIndex,
+      cwd: process.cwd(),
+      pid: process.pid,
+      node: process.version,
+    },
+    fs: {
+      dist: safeStat(clientDist),
+      index: safeStat(clientIndex),
+      assets: safeStat(assetsDir),
+      distEntries: safeListDir(clientDist),
+      assetsEntries: safeListDir(assetsDir),
+    },
+    error: {
+      message: err?.message,
+      code: err?.code,
+      status: err?.status,
+      statusCode: err?.statusCode,
+      path: err?.path,
+      syscall: err?.syscall,
+    },
+    ...(fallback ? { fallback } : {}),
+  });
 }
 
 export function mountClient(app) {
@@ -70,10 +140,19 @@ export function mountClient(app) {
   app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
     res.sendFile(clientIndex, (err) => {
       if (!err) return;
-      if (!warnedMissingClient) {
-        warnedMissingClient = true;
-        console.warn(`[client] Failed to serve ${clientIndex}: ${err?.message || err}`);
+      let fallback = null;
+      if (!res.headersSent) {
+        try {
+          const html = fs.readFileSync(clientIndex, "utf8");
+          res.setHeader("Cache-Control", "no-cache");
+          res.type("html").send(html);
+          fallback = { served: true, bytes: html.length };
+        } catch (readErr) {
+          fallback = { served: false, error: readErr?.code || readErr?.message || String(readErr) };
+        }
       }
+      logSendFileFailure(req, err, { fallback });
+      if (fallback?.served) return;
       if (!res.headersSent) res.status(err?.statusCode || 404).end();
     });
   });
