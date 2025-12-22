@@ -4726,7 +4726,7 @@ function ComposeView({
       </div>
 
       {/* Upcoming Jobs, Recent Posts & Drafts */}
-      <div className="grid gap-6 lg:gap-8 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:gap-8 lg:grid-cols-2 xl:grid-cols-3">
         <Card className={homeCardClass}>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Upcoming Jobs</CardTitle>
@@ -4773,7 +4773,7 @@ function ComposeView({
                         </button>
                       </div>
 	                    </div>
-	                    <div className="text-sm text-white/80 overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] line-clamp-1 sm:line-clamp-2">
+	                    <div className="text-sm text-white/80 overflow-hidden whitespace-pre-wrap break-all line-clamp-1 sm:line-clamp-2">
 	                      {getJobDisplayContent(job) || ""}
 	                    </div>
 	                  </div>
@@ -4828,7 +4828,7 @@ function ComposeView({
                         {job.updatedAt ? formatTimeAgo(job.updatedAt) : "Posted"}
 	                      </span>
 	                    </div>
-	                    <div className="text-sm text-white/80 overflow-hidden whitespace-pre-wrap break-words [overflow-wrap:anywhere] line-clamp-1 sm:line-clamp-2">
+	                    <div className="text-sm text-white/80 overflow-hidden whitespace-pre-wrap break-all line-clamp-1 sm:line-clamp-2">
 	                      {(getJobDisplayContent(job) || "").trim() || "Loading content…"}
 	                    </div>
 	                  </div>
