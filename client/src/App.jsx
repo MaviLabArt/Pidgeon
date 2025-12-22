@@ -5326,6 +5326,7 @@ function JobsView({
   const [activeTab, setActiveTab] = useState(initialTab === "posted" ? "posted" : "queue");
   const [skeletonStuck, setSkeletonStuck] = useState(false);
   const [repairingLedger, setRepairingLedger] = useState(false);
+  const autoLoadMoreRef = useRef({ tab: "", attempts: 0 });
 
   const onCancelRef = useRef(onCancel);
   const onRescheduleRef = useRef(onReschedule);
@@ -5373,11 +5374,34 @@ function JobsView({
   useEffect(() => {
     if (!showSkeleton) {
       setSkeletonStuck(false);
+      autoLoadMoreRef.current = { tab: "", attempts: 0 };
       return;
     }
     const t = setTimeout(() => setSkeletonStuck(true), 3500);
     return () => clearTimeout(t);
   }, [showSkeleton, activeTab]);
+
+  useEffect(() => {
+    if (!showSkeleton) return;
+    if (autoLoadMoreRef.current.tab !== activeTab) {
+      autoLoadMoreRef.current = { tab: activeTab, attempts: 0 };
+    }
+
+    const maxAttempts = 6;
+    if (autoLoadMoreRef.current.attempts >= maxAttempts) return;
+
+    if (activeTab === "posted") {
+      if (!postedHasMore || postedLoading || typeof onLoadMorePosted !== "function") return;
+      autoLoadMoreRef.current.attempts += 1;
+      const t = setTimeout(() => onLoadMorePosted(), 150);
+      return () => clearTimeout(t);
+    }
+
+    if (!queueHasMore || queueLoading || typeof onLoadMoreQueue !== "function") return;
+    autoLoadMoreRef.current.attempts += 1;
+    const t = setTimeout(() => onLoadMoreQueue(), 150);
+    return () => clearTimeout(t);
+  }, [showSkeleton, activeTab, postedHasMore, postedLoading, onLoadMorePosted, queueHasMore, queueLoading, onLoadMoreQueue]);
 
   const repairScope = activeTab === "posted" ? "full" : "queue";
   const repairLabel = activeTab === "posted" ? "Repair history" : "Repair queue";
@@ -5397,6 +5421,15 @@ function JobsView({
       setRepairingLedger(false);
     }
   }, [onRepairMailbox, repairingLedger, repairScope]);
+
+  const canLoadMoreNow = activeTab === "posted"
+    ? postedHasMore && typeof onLoadMorePosted === "function" && !postedLoading
+    : queueHasMore && typeof onLoadMoreQueue === "function" && !queueLoading;
+  const loadMoreLabel = activeTab === "posted" ? "Load older" : "Load further";
+  const handleLoadMoreNow = useCallback(() => {
+    if (activeTab === "posted") return onLoadMorePosted?.();
+    return onLoadMoreQueue?.();
+  }, [activeTab, onLoadMorePosted, onLoadMoreQueue]);
 
   return (
     <div className="space-y-4">
@@ -5433,12 +5466,19 @@ function JobsView({
             <div className="rounded-3xl bg-indigo-500/10 p-4 ring-1 ring-indigo-400/30">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm text-indigo-100">
-                  <div className="font-semibold">Jobs found, but pages aren&apos;t loading</div>
+                  <div className="font-semibold">Jobs found, but details aren&apos;t visible yet</div>
                   <div className="mt-1 text-xs text-indigo-100/70">
-                    This can happen after relay changes or relay retention. Try retrying, or request a repair to republish the ledger.
+                    {canLoadMoreNow
+                      ? "Your newest history page may contain only cancels/errors; load older pages to reach your posted items."
+                      : "This can happen after relay changes or relay retention. Try retrying, or request a repair to republish the ledger."}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {canLoadMoreNow ? (
+                    <Button type="button" size="sm" onClick={handleLoadMoreNow}>
+                      {loadMoreLabel}
+                    </Button>
+                  ) : null}
                   {onRetryMailbox ? (
                     <Button type="button" size="sm" variant="outline" onClick={() => onRetryMailbox?.()}>
                       Retry sync
