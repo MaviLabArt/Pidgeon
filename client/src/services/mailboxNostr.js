@@ -20,6 +20,28 @@ const BROAD_PAGE_LIMIT_MAX = 3000;
 
 const toIso = (ts) => new Date((Number(ts) || 0) * 1000).toISOString();
 
+function bucketFromDTag(dTag) {
+  const s = String(dTag || "").trim();
+  if (!s) return "";
+  const bucketMatch = s.match(/:bucket:(\d{4}-\d{2})$/);
+  if (bucketMatch) return bucketMatch[1] || "";
+  const histMatch = s.match(/:hist:(\d{4}-\d{2}):\d+$/);
+  if (histMatch) return histMatch[1] || "";
+  return "";
+}
+
+function bucketWindowUtc(bucket) {
+  const m = String(bucket || "").trim().match(/^(\d{4})-(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  const start = Math.floor(Date.UTC(year, month - 1, 1) / 1000);
+  const end = Math.floor(Date.UTC(year, month, 1) / 1000) - 1;
+  const margin = 60 * 60 * 24 * 2;
+  return { since: Math.max(0, start - margin), until: Math.max(0, end + margin) };
+}
+
 function boundedCacheSet(map, key, value, maxSize = 500) {
   if (!map || !key) return;
   map.set(key, value);
@@ -376,17 +398,36 @@ export async function subscribeMailbox(pubkey, { onJobs, onSync, onCounts, onSup
 
     // Fallback for relays that don't index d: fetch a bounded recent window and client-filter.
     const since = Math.max(0, (lastIndexCreatedAt || Math.floor(Date.now() / 1000)) - BROAD_SINCE_SEC);
+    const computedBroadLimit = Math.max(50, Number(broadLimit) || 0);
     const broad = await fetchEventsOnce(mailboxRelays, {
       kinds: [MAILBOX_KIND],
       authors: [dvm.pubkey],
       since,
-      limit: Math.max(50, Number(broadLimit) || 0)
+      limit: computedBroadLimit
     });
     const matches = (broad || []).filter((ev) => getDTag(ev) === want);
-    if (!dIndexingBroken && !tagged?.length && matches.length) {
+
+    let bucketMatches = [];
+    const bucket = bucketFromDTag(want);
+    const window = bucket ? bucketWindowUtc(bucket) : null;
+    // For old buckets, the latest bucket/page events may be older than BROAD_SINCE_SEC (we publish them only when they change).
+    // If our "recent" broad query didn't find anything, try a tight month window based on the bucket id (YYYY-MM).
+    if (!matches.length && window) {
+      const broadByBucket = await fetchEventsOnce(mailboxRelays, {
+        kinds: [MAILBOX_KIND],
+        authors: [dvm.pubkey],
+        since: window.since,
+        until: window.until,
+        limit: computedBroadLimit
+      });
+      bucketMatches = (broadByBucket || []).filter((ev) => getDTag(ev) === want);
+    }
+
+    const allMatches = matches.length ? matches : bucketMatches;
+    if (!dIndexingBroken && !tagged?.length && allMatches.length) {
       setDIndexingBroken(true, { reason: purpose || "missing #d indexing" });
     }
-    return pickLatestEvent(matches);
+    return pickLatestEvent(allMatches);
   }
 
   async function fetchLatestByDTags(dTags, { broadLimit = 0, purpose = "" } = {}) {
