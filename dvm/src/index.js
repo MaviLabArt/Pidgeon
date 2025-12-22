@@ -44,6 +44,7 @@ import {
 } from "./appDataDb.js";
 import { getSupportPolicy } from "./supportPolicy.js";
 import { createInvoiceViaLnurlVerify, verifyInvoiceViaLnurlVerify } from "./supportPayments.js";
+import { parseNaturalWhen } from "./naturalWhen.js";
 import crypto from "crypto";
 import net from "net";
 
@@ -1359,7 +1360,28 @@ async function parseDmRequest({ event, requesterPubkey }) {
     .map((t) => t[1]);
   if (!outerPTags.includes(DVM_PUBKEY)) throw new Error("Request not addressed to this DVM");
 
-  const scheduledAt = Number(parsed?.scheduledAt) || 0;
+  const scheduledAtRaw = parsed?.scheduledAt;
+  let scheduledAt = 0;
+  if (typeof scheduledAtRaw === "number" && Number.isFinite(scheduledAtRaw)) {
+    scheduledAt = Math.floor(scheduledAtRaw);
+  } else if (typeof scheduledAtRaw === "string") {
+    const trimmed = scheduledAtRaw.trim();
+    if (/^\d+$/.test(trimmed)) {
+      scheduledAt = Math.floor(Number(trimmed) || 0);
+    } else {
+      const asIso = Date.parse(trimmed);
+      if (!Number.isNaN(asIso)) {
+        scheduledAt = Math.floor(asIso / 1000);
+      } else {
+        const parsedWhen = parseNaturalWhen(trimmed, { now: new Date() });
+        if (parsedWhen?.ok && parsedWhen.date) {
+          const ts = new Date(parsedWhen.date).getTime();
+          if (!Number.isNaN(ts)) scheduledAt = Math.floor(ts / 1000);
+        }
+      }
+    }
+  }
+  if (scheduledAt > 1e12) scheduledAt = Math.floor(scheduledAt / 1000);
   if (!scheduledAt) throw new Error("Missing scheduledAt");
 
   const dmEnc = String(parsed?.dmEnc || "");

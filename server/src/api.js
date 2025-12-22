@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { Readable } from "stream";
 import { mountClient } from "./serveClient.js";
 import { getPublicKey, nip19 } from "nostr-tools";
+import { parseNaturalWhen } from "./naturalWhen.js";
 
 const DEFAULT_NIP05_PUBKEY = "fb04b2aadb3cf9d3b97af52d3f544e1159ee1a4b8548334549d13b7cac4f8769";
 
@@ -132,6 +133,31 @@ export function startApiServer() {
 
   app.get("/api/health", (req, res) => {
     res.json({ ok: true });
+  });
+
+  app.post("/api/when/parse", (req, res) => {
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ ok: false, error: "text required" });
+
+    const nowRaw = req.body?.now;
+    const baseNow =
+      typeof nowRaw === "number" && Number.isFinite(nowRaw)
+        ? new Date(nowRaw > 1e12 ? nowRaw : nowRaw * 1000)
+        : typeof nowRaw === "string" && nowRaw.trim()
+          ? new Date(nowRaw)
+          : new Date();
+
+    const defaultTime = req.body?.defaultTime && typeof req.body.defaultTime === "object"
+      ? { hours: req.body.defaultTime.hours, minutes: req.body.defaultTime.minutes }
+      : null;
+
+    const parsed = parseNaturalWhen(text, { now: baseNow, defaultTime });
+    if (!parsed?.ok || !parsed.date) {
+      return res.status(400).json({ ok: false, error: parsed?.error || "Could not parse" });
+    }
+    const d = new Date(parsed.date);
+    if (Number.isNaN(d.getTime())) return res.status(400).json({ ok: false, error: "Invalid date result" });
+    return res.json({ ok: true, epochSec: Math.floor(d.getTime() / 1000), iso: d.toISOString() });
   });
 
   // Lightweight in-memory calendar endpoints (dev helper for calendar UI)

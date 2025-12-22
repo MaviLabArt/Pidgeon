@@ -91,6 +91,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Tooltip } from "@/components/ui/tooltip.jsx";
 import { Uploader } from "@/components/Uploader.jsx";
 import EmojiPickerButton from "@/components/EmojiPickerButton.jsx";
+import { NaturalWhenField } from "@/components/NaturalWhenField.jsx";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 
 const loadCalendarPage = () => import("@/features/calendar");
@@ -647,10 +648,7 @@ export default function PidgeonUI() {
   }));
   const settingsLoadedRef = useRef("");
   const [scheduleAt, setScheduleAt] = useState(() => {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() + 30);
-    d.setSeconds(0, 0);
-    return formatLocalDateTimeInput(d); // yyyy-mm-ddThh:mm in local time
+    return ""; // yyyy-mm-ddThh:mm in local time
   });
   const [repostOpen, setRepostOpen] = useState(false);
   const [repostTarget, setRepostTarget] = useState("");
@@ -1723,7 +1721,9 @@ export default function PidgeonUI() {
       return showToast("Configure DVM pubkey/relays (VITE_DVM_PUBKEY/VITE_DVM_RELAYS)");
     }
 
-    const when = new Date(scheduleAt);
+    const whenInput = String(scheduleAt || "").trim();
+    if (!whenInput) return showToast("Choose time first");
+    const when = new Date(whenInput);
     if (Number.isNaN(when.getTime())) return showToast("Pick a valid time");
     const scheduledAtSec = Math.floor(when.getTime() / 1000);
 
@@ -1762,16 +1762,17 @@ export default function PidgeonUI() {
           statusInfo: "",
           lastError: ""
         };
-        setJobs((prev) => sortJobsByUpdated([j, ...(Array.isArray(prev) ? prev : [])]));
-        setSchedulingStep(`Scheduled for ${formatDateTime(when)}`);
-        playScheduleSuccessSound();
-        showToast("Scheduled ✨");
-        setEditor({ content: "", tags: "", media: [] });
-        setComposerDraftId("");
-        if (draftIdForCleanup) {
-          const draftPreview = String(editor.content || "").trim().replace(/\s+/g, " ").slice(0, 160);
-          setDraftCleanupPrompt({ open: true, id: draftIdForCleanup, preview: draftPreview });
-        }
+	        setJobs((prev) => sortJobsByUpdated([j, ...(Array.isArray(prev) ? prev : [])]));
+	        setSchedulingStep(`Scheduled for ${formatDateTime(when)}`);
+	        playScheduleSuccessSound();
+	        showToast("Scheduled ✨");
+	        setEditor({ content: "", tags: "", media: [] });
+          setScheduleAt("");
+	        setComposerDraftId("");
+	        if (draftIdForCleanup) {
+	          const draftPreview = String(editor.content || "").trim().replace(/\s+/g, " ").slice(0, 160);
+	          setDraftCleanupPrompt({ open: true, id: draftIdForCleanup, preview: draftPreview });
+	        }
         setTimeout(() => setSchedulingStep(""), 1200);
         return;
       }
@@ -1819,15 +1820,16 @@ export default function PidgeonUI() {
         lastError: ""
       };
       setJobs((prev) => sortJobsByUpdated([j, ...prev]));
-      setSchedulingStep(`Scheduled for ${formatDateTime(when)}`);
-      playScheduleSuccessSound();
-      showToast("Scheduled via DVM ✨");
-      setEditor({ content: "", tags: "", media: [] });
-      setComposerDraftId("");
-      if (draftIdForCleanup) {
-        const draftPreview = String(editor.content || "").trim().replace(/\s+/g, " ").slice(0, 160);
-        setDraftCleanupPrompt({ open: true, id: draftIdForCleanup, preview: draftPreview });
-      }
+	      setSchedulingStep(`Scheduled for ${formatDateTime(when)}`);
+	      playScheduleSuccessSound();
+	      showToast("Scheduled via DVM ✨");
+	      setEditor({ content: "", tags: "", media: [] });
+        setScheduleAt("");
+	      setComposerDraftId("");
+	      if (draftIdForCleanup) {
+	        const draftPreview = String(editor.content || "").trim().replace(/\s+/g, " ").slice(0, 160);
+	        setDraftCleanupPrompt({ open: true, id: draftIdForCleanup, preview: draftPreview });
+	      }
       setTimeout(() => setSchedulingStep(""), 2000);
     } catch (err) {
       console.error("[schedulePost] Schedule error", err);
@@ -3346,18 +3348,19 @@ export default function PidgeonUI() {
               </Button>
             </div>
           )}
-	          {view === "compose" && (
-	            <ComposeView
-	              editor={editor}
-	              setEditor={setEditor}
-	              charLimit={charLimit}
-	              remaining={remaining}
-	              scheduleAt={scheduleAt}
-	              setScheduleAt={setScheduleAt}
-	              onSaveDraft={saveDraft}
-	              onSchedule={schedulePost}
-	              onOpenRepost={() => openRepostDialog()}
-	              pubkey={pubkey}
+		          {view === "compose" && (
+		            <ComposeView
+		              editor={editor}
+		              setEditor={setEditor}
+		              charLimit={charLimit}
+		              remaining={remaining}
+		              scheduleAt={scheduleAt}
+		              setScheduleAt={setScheduleAt}
+                  showToast={showToast}
+		              onSaveDraft={saveDraft}
+		              onSchedule={schedulePost}
+		              onOpenRepost={() => openRepostDialog()}
+		              pubkey={pubkey}
 	              uploads={uploads}
 	              onUploadStart={handleUploadStart}
 	          onUploadProgress={handleUploadProgress}
@@ -3902,20 +3905,16 @@ export default function PidgeonUI() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!rescheduleJob} onOpenChange={() => setRescheduleJob(null)}>
-        <DialogContent className="rounded-3xl sm:max-w-md">
+        <Dialog open={!!rescheduleJob} onOpenChange={() => setRescheduleJob(null)}>
+          <DialogContent className="rounded-3xl sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Reschedule Post</DialogTitle>
             <DialogDescription>
               Pick a new time for this scheduled post.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <Input
-              type="datetime-local"
-              value={rescheduleWhen}
-              onChange={(e) => setRescheduleWhen(e.target.value)}
-            />
+          <div className="space-y-4 px-6 pb-6">
+            <NaturalWhenField value={rescheduleWhen} onChange={setRescheduleWhen} />
           </div>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setRescheduleJob(null)}>Cancel</Button>
@@ -4054,11 +4053,7 @@ export default function PidgeonUI() {
 
             <div className="space-y-3 rounded-2xl bg-slate-950/50 p-4 ring-1 ring-white/10">
               <div className="text-sm font-medium">When should it post?</div>
-              <Input
-                type="datetime-local"
-                value={repostScheduleAt}
-                onChange={(e) => setRepostScheduleAt(e.target.value)}
-              />
+              <NaturalWhenField value={repostScheduleAt} onChange={setRepostScheduleAt} />
             </div>
 
             {repostShowAnyway ? (
@@ -4375,6 +4370,7 @@ function ComposeView({
   remaining,
   scheduleAt,
   setScheduleAt,
+  showToast,
   onSaveDraft,
   onSchedule,
   onOpenRepost,
@@ -4414,6 +4410,7 @@ function ComposeView({
   useDraft,
 }) {
   const textareaRef = useRef(null);
+  const [schedulePickerOpen, setSchedulePickerOpen] = useState(false);
   const hasSigner = (() => {
     try {
       return Boolean(window?.nostr?.signEvent) && Boolean(window?.nostr?.nip44?.encrypt);
@@ -4422,6 +4419,21 @@ function ComposeView({
     }
   })();
   const composeLocked = !pubkey || !hasSigner;
+  const scheduleAtOk = (() => {
+    const raw = String(scheduleAt || "").trim();
+    if (!raw) return false;
+    const d = new Date(raw);
+    return !Number.isNaN(d.getTime());
+  })();
+  const scheduleAtLabel = (() => {
+    if (!scheduleAtOk) return "";
+    const d = new Date(scheduleAt);
+    if (Number.isNaN(d.getTime())) return "";
+    const dateLabel = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const timeLabel = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return `${dateLabel} · ${timeLabel}`;
+  })();
+  const scheduleAtButtonText = scheduleAtOk ? scheduleAtLabel : "SET TIME ⌛";
 
   const insertEmoji = (emoji) => {
     if (!emoji) return;
@@ -4604,12 +4616,18 @@ function ComposeView({
             >
               <Repeat2 className="h-4 w-4" />
             </Button>
-            <Input
-              type="datetime-local"
-              value={scheduleAt}
-              onChange={(e) => setScheduleAt(e.target.value)}
-              className="!w-auto min-w-[200px]"
-            />
+            <Button
+              type="button"
+              variant="outline"
+              className={clsx(
+                "h-11 min-w-[220px] justify-center rounded-2xl px-4 bg-slate-950/60 text-white/90 ring-1 ring-white/10 hover:bg-slate-950/80 hover:ring-white/20",
+                scheduleAtOk ? "font-medium" : "font-semibold uppercase tracking-[0.14em]"
+              )}
+              title={scheduleAtOk ? formatDateTime(scheduleAt) : "Choose time first"}
+              onClick={() => setSchedulePickerOpen(true)}
+            >
+              <span className="min-w-0 truncate text-xs">{scheduleAtButtonText}</span>
+            </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -4622,18 +4640,28 @@ function ComposeView({
             >
               <span className="relative -top-px">Save Draft</span>
             </Button>
-            <Button
-              onClick={onSchedule}
-              loading={schedulingBusy}
-              busyText={schedulingStep || "Scheduling…"}
-              className="whitespace-nowrap"
-              disabled={!canSchedule}
+            <div
+              className="inline-flex"
+              onClick={() => {
+                if (canSchedule && !scheduleAtOk) {
+                  showToast?.("Choose time first");
+                  setSchedulePickerOpen(true);
+                }
+              }}
             >
-              <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                <ScheduleSendIcon className="text-white/90" />
-                <span>Schedule Send</span>
-              </span>
-            </Button>
+              <Button
+                onClick={() => scheduleAtOk && onSchedule?.()}
+                loading={schedulingBusy}
+                busyText={schedulingStep || "Scheduling…"}
+                className="whitespace-nowrap"
+                disabled={!canSchedule || !scheduleAtOk}
+              >
+                <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                  <ScheduleSendIcon className="text-white/90" />
+                  <span>Schedule Send</span>
+                </span>
+              </Button>
+            </div>
             {schedulingStep && (
               <span className="text-xs rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/10 text-white/80">
                 {schedulingStep}
@@ -4641,10 +4669,25 @@ function ComposeView({
             )}
           </div>
 
-	          {uploads.length > 0 && (
-	            <div className="rounded-2xl bg-slate-950/60 p-3 ring-1 ring-white/10">
-	              <div className="text-xs font-semibold text-white/70 mb-2">Uploads</div>
-	              <div className="space-y-2">
+          <Dialog open={schedulePickerOpen} onOpenChange={setSchedulePickerOpen}>
+            <DialogContent className="rounded-3xl sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Schedule time</DialogTitle>
+                <DialogDescription>Type “in 2h”, “tomorrow 9am”, or use the picker.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 px-6 pb-6">
+                <NaturalWhenField value={scheduleAt} onChange={setScheduleAt} />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSchedulePickerOpen(false)}>Done</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {uploads.length > 0 && (
+            <div className="rounded-2xl bg-slate-950/60 p-3 ring-1 ring-white/10">
+              <div className="text-xs font-semibold text-white/70 mb-2">Uploads</div>
+              <div className="space-y-2">
                 {uploads.map((u, idx) => (
                   <div key={`${u.name}-${idx}`} className="flex items-center gap-2 text-xs">
                     <div className="truncate flex-1">{u.name}</div>

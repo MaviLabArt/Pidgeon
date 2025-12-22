@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MemoJobCard } from "@/components/JobCard.jsx";
+import { NaturalWhenField } from "@/components/NaturalWhenField.jsx";
 
 function sortByScheduledAtAsc(list = []) {
   return Array.from(list || []).sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
@@ -51,10 +52,10 @@ export function DmView({
             </div>
             <div className="space-y-2">
               <div className="text-sm font-medium text-white/70">Send at</div>
-              <Input
-                type="datetime-local"
+              <NaturalWhenField
                 value={scheduleAt}
-                onChange={(e) => setScheduleAt(e.target.value)}
+                onChange={setScheduleAt}
+                showPresets={false}
               />
             </div>
           </div>
