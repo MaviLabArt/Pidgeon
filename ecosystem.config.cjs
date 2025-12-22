@@ -37,7 +37,7 @@ module.exports = {
         // Optional overrides (defaults exist in code):
         // API_PORT: "3001",
         // DATA_DIR: "data",
-        // CLIENT_DIST: CLIENT_DIST,
+        CLIENT_DIST: CLIENT_DIST,
         //
         // CORS (optional):
         // ENABLE_CORS: "1",

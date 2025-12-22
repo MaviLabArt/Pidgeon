@@ -411,6 +411,13 @@ function formatLocalDateTimeInput(date = new Date()) {
   )}`;
 }
 
+function parseLocalDateTimeInput(value) {
+  const m = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), 0, 0);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function daysInMonthGrid(date) {
   const start = startOfMonth(date);
   const end = endOfMonth(date);
@@ -1723,8 +1730,8 @@ export default function PidgeonUI() {
 
     const whenInput = String(scheduleAt || "").trim();
     if (!whenInput) return showToast("Choose time first");
-    const when = new Date(whenInput);
-    if (Number.isNaN(when.getTime())) return showToast("Pick a valid time");
+    const when = parseLocalDateTimeInput(whenInput) || new Date(whenInput);
+    if (!when || Number.isNaN(when.getTime())) return showToast("Pick a valid time");
     const scheduledAtSec = Math.floor(when.getTime() / 1000);
 
     const gate = isDemo ? { ok: true, cap: null } : await getSupportGateCap({ scheduledAtSec, feature: "note", intent: "schedule_note" });
@@ -3905,12 +3912,12 @@ export default function PidgeonUI() {
         </DialogContent>
       </Dialog>
 
-        <Dialog open={!!rescheduleJob} onOpenChange={() => setRescheduleJob(null)}>
-          <DialogContent className="rounded-3xl sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Reschedule Post</DialogTitle>
-            <DialogDescription>
-              Pick a new time for this scheduled post.
+	        <Dialog open={!!rescheduleJob} onOpenChange={() => setRescheduleJob(null)}>
+	          <DialogContent className="rounded-3xl max-w-sm">
+	          <DialogHeader>
+	            <DialogTitle>Reschedule Post</DialogTitle>
+	            <DialogDescription>
+	              Pick a new time for this scheduled post.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 px-6 pb-6">
@@ -4419,16 +4426,18 @@ function ComposeView({
     }
   })();
   const composeLocked = !pubkey || !hasSigner;
-  const scheduleAtOk = (() => {
+  const scheduleAtDate = (() => {
     const raw = String(scheduleAt || "").trim();
-    if (!raw) return false;
+    if (!raw) return null;
+    const localParsed = parseLocalDateTimeInput(raw);
+    if (localParsed) return localParsed;
     const d = new Date(raw);
-    return !Number.isNaN(d.getTime());
+    return Number.isNaN(d.getTime()) ? null : d;
   })();
+  const scheduleAtOk = Boolean(scheduleAtDate);
   const scheduleAtLabel = (() => {
-    if (!scheduleAtOk) return "";
-    const d = new Date(scheduleAt);
-    if (Number.isNaN(d.getTime())) return "";
+    if (!scheduleAtDate) return "";
+    const d = scheduleAtDate;
     const dateLabel = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
     const timeLabel = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     return `${dateLabel} · ${timeLabel}`;
@@ -4620,10 +4629,12 @@ function ComposeView({
               type="button"
               variant="outline"
               className={clsx(
-                "h-11 min-w-[220px] justify-center rounded-2xl px-4 bg-slate-950/60 text-white/90 ring-1 ring-white/10 hover:bg-slate-950/80 hover:ring-white/20",
-                scheduleAtOk ? "font-medium" : "font-semibold uppercase tracking-[0.14em]"
+                "h-11 w-full justify-center rounded-2xl px-4 ring-1 transition-colors sm:w-auto sm:min-w-[220px]",
+                scheduleAtOk
+                  ? "bg-slate-950/60 text-white/90 ring-white/10 hover:bg-slate-950/80 hover:ring-white/20 font-medium"
+                  : "bg-indigo-500/15 text-white ring-indigo-400/30 hover:bg-indigo-500/20 hover:ring-indigo-300/40 font-semibold uppercase tracking-[0.14em]"
               )}
-              title={scheduleAtOk ? formatDateTime(scheduleAt) : "Choose time first"}
+              title={scheduleAtDate ? formatDateTime(scheduleAtDate) : "Choose time first"}
               onClick={() => setSchedulePickerOpen(true)}
             >
               <span className="min-w-0 truncate text-xs">{scheduleAtButtonText}</span>
@@ -4670,7 +4681,7 @@ function ComposeView({
           </div>
 
           <Dialog open={schedulePickerOpen} onOpenChange={setSchedulePickerOpen}>
-            <DialogContent className="rounded-3xl sm:max-w-sm">
+            <DialogContent className="rounded-3xl max-w-sm">
               <DialogHeader>
                 <DialogTitle>Schedule time</DialogTitle>
                 <DialogDescription>Type “in 2h”, “tomorrow 9am”, or use the picker.</DialogDescription>
@@ -4966,6 +4977,14 @@ function ComposeView({
 
 function PostPreview({ content, manualTags, pubkey, when, addClientTag, nsfw, uploadTags = [] }) {
   const [previewEvent, setPreviewEvent] = useState(null);
+  const whenDate = useMemo(() => {
+    const raw = String(when || "").trim();
+    if (!raw) return null;
+    const localParsed = parseLocalDateTimeInput(raw);
+    if (localParsed) return localParsed;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }, [when]);
   const tagList = useMemo(() => {
     if (!previewEvent?.tags) return [];
     return previewEvent.tags.filter((t) => t[0] === "t").map((t) => t[1]);
@@ -4982,7 +5001,7 @@ function PostPreview({ content, manualTags, pubkey, when, addClientTag, nsfw, up
           addClientTag,
           nsfw,
         });
-        draft.created_at = when ? Math.floor(new Date(when).getTime() / 1000) : draft.created_at;
+        draft.created_at = whenDate ? Math.floor(whenDate.getTime() / 1000) : draft.created_at;
         if (pubkey) draft.pubkey = pubkey;
         // Preview should not spam the signer; render unsigned
         if (!cancelled) setPreviewEvent(draft);
@@ -4993,13 +5012,13 @@ function PostPreview({ content, manualTags, pubkey, when, addClientTag, nsfw, up
     return () => {
       cancelled = true;
     };
-  }, [content, manualTags, uploadTags, addClientTag, nsfw, pubkey, when]);
+  }, [content, manualTags, uploadTags, addClientTag, nsfw, pubkey, whenDate]);
 
   const lines = useMemo(() => (content || "").split(/\n/), [content]);
 
   return (
     <div className="rounded-3xl bg-slate-950/60 p-4 ring-1 ring-white/10">
-      <div className="text-xs text-white/60">Scheduled · {formatDateTime(when)}</div>
+      <div className="text-xs text-white/60">{whenDate ? `Scheduled · ${formatDateTime(whenDate)}` : "Not scheduled yet"}</div>
       <div className="mt-1 text-[11px] text-white/60">
         {previewEvent?.id ? `Signed preview · ${previewEvent.id.slice(0, 8)}…` : "Unsigned preview"}
       </div>
