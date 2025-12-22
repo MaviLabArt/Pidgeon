@@ -801,6 +801,7 @@ export default function PidgeonUI() {
   const supportDismissedRef = useRef(new Set());
   const mailboxRetryRef = useRef(null);
   const mailboxSubRef = useRef(null);
+  const dvmSelfWarningRef = useRef("");
   const mailboxJobsBatchRef = useRef({ handle: 0, latest: null, latestFp: "", appliedFp: "" });
   const noteHydrateBatchRef = useRef({ handle: 0, events: new Map() });
   const tz = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
@@ -1160,6 +1161,18 @@ export default function PidgeonUI() {
     toastTimersRef.current.hide = setTimeout(() => setToastVisible(false), 3200);
     toastTimersRef.current.clear = setTimeout(() => setToast(""), 3600);
   }, [clearToastTimers]);
+
+  useEffect(() => {
+    if (!pubkey) return;
+    const dvm = getDvmConfig();
+    const dvmPk = String(dvm?.pubkey || "").trim();
+    if (!dvmPk) return;
+    if (pubkey !== dvmPk) return;
+    const fp = `${pubkey}:${dvmPk}`;
+    if (dvmSelfWarningRef.current === fp) return;
+    dvmSelfWarningRef.current = fp;
+    showToast("You are logged in as the DVM account (not recommended). Use a separate key for your user.");
+  }, [pubkey, showToast]);
 
   function playScheduleSuccessSound() {
     try {
@@ -1855,10 +1868,7 @@ export default function PidgeonUI() {
   }
 
   async function requestMailboxRepair({ scope = "queue" } = {}) {
-    if (!pubkey || !window.nostr?.signEvent || !window.nostr?.nip44?.encrypt) {
-      showToast("Connect a Nostr signer first");
-      return;
-    }
+    if (!pubkey) return showToast("Login first");
     const dvm = getDvmConfig();
     if (!dvm.pubkey || !dvm.relays.length) {
       showToast("Configure DVM pubkey/relays (VITE_DVM_PUBKEY/VITE_DVM_RELAYS)");
@@ -1868,7 +1878,7 @@ export default function PidgeonUI() {
       await ensureMailboxSecrets(pubkey);
       const requestEvent = await buildMailboxRepairRequest({ fromPubkey: pubkey, scope, dvmPubkey: dvm.pubkey });
       await publishScheduleRequest({ requestEvent, dvmRelays: dvm.relays });
-      showToast("Job ledger repair requested");
+      showToast(scope === "full" ? "Job ledger repair requested (full)" : "Job ledger repair requested");
       mailboxRetryRef.current?.();
     } catch (err) {
       console.warn("[mailbox] repair request failed", err?.message || err);
@@ -3480,6 +3490,8 @@ export default function PidgeonUI() {
               postedHasMore={postedMore.hasMore}
               postedLoading={postedMore.loading}
               onLoadMorePosted={loadOlderPosted}
+              onRepairMailbox={requestMailboxRepair}
+              onRetryMailbox={() => mailboxRetryRef.current?.()}
             />
           )}
 
@@ -5307,9 +5319,13 @@ function JobsView({
   onLoadMoreQueue,
   postedHasMore,
   postedLoading,
-  onLoadMorePosted
+  onLoadMorePosted,
+  onRepairMailbox,
+  onRetryMailbox
 }) {
   const [activeTab, setActiveTab] = useState(initialTab === "posted" ? "posted" : "queue");
+  const [skeletonStuck, setSkeletonStuck] = useState(false);
+  const [repairingLedger, setRepairingLedger] = useState(false);
 
   const onCancelRef = useRef(onCancel);
   const onRescheduleRef = useRef(onReschedule);
@@ -5354,6 +5370,34 @@ function JobsView({
       (activeTab === "queue" && (queueHasMore || queueLoading))
     );
 
+  useEffect(() => {
+    if (!showSkeleton) {
+      setSkeletonStuck(false);
+      return;
+    }
+    const t = setTimeout(() => setSkeletonStuck(true), 3500);
+    return () => clearTimeout(t);
+  }, [showSkeleton, activeTab]);
+
+  const repairScope = activeTab === "posted" ? "full" : "queue";
+  const repairLabel = activeTab === "posted" ? "Repair history" : "Repair queue";
+  const handleRepair = useCallback(async () => {
+    if (!onRepairMailbox) return;
+    if (repairingLedger) return;
+    const ok = window.confirm(
+      repairScope === "full"
+        ? "Repair full job ledger (includes posted/history)? Recommended only if Posted is stuck."
+        : "Repair scheduled jobs only? Recommended only if Queue is stuck."
+    );
+    if (!ok) return;
+    setRepairingLedger(true);
+    try {
+      await onRepairMailbox({ scope: repairScope });
+    } finally {
+      setRepairingLedger(false);
+    }
+  }, [onRepairMailbox, repairingLedger, repairScope]);
+
   return (
     <div className="space-y-4">
       {/* Tab Navigation */}
@@ -5384,19 +5428,53 @@ function JobsView({
 
       {/* Jobs Grid */}
       {showSkeleton ? (
-        <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="animate-pulse rounded-3xl bg-slate-900 p-5 ring-1 ring-white/10">
-              <div className="flex items-center justify-between">
-                <div className="h-3 w-32 rounded bg-white/10" />
-                <div className="h-8 w-16 rounded-2xl bg-white/10" />
+        <div className="space-y-4">
+          {skeletonStuck && (onRetryMailbox || onRepairMailbox) ? (
+            <div className="rounded-3xl bg-indigo-500/10 p-4 ring-1 ring-indigo-400/30">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-indigo-100">
+                  <div className="font-semibold">Jobs found, but pages aren&apos;t loading</div>
+                  <div className="mt-1 text-xs text-indigo-100/70">
+                    This can happen after relay changes or relay retention. Try retrying, or request a repair to republish the ledger.
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {onRetryMailbox ? (
+                    <Button type="button" size="sm" variant="outline" onClick={() => onRetryMailbox?.()}>
+                      Retry sync
+                    </Button>
+                  ) : null}
+                  {onRepairMailbox ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      loading={repairingLedger}
+                      busyText="Requesting…"
+                      disabled={repairingLedger}
+                      onClick={handleRepair}
+                    >
+                      {repairLabel}
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-              <div className="mt-4 h-3 w-full rounded bg-white/10" />
-              <div className="mt-2 h-3 w-5/6 rounded bg-white/10" />
-              <div className="mt-2 h-3 w-2/3 rounded bg-white/10" />
-              <div className="mt-6 h-10 w-full rounded-2xl bg-white/10" />
             </div>
-          ))}
+          ) : null}
+
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="animate-pulse rounded-3xl bg-slate-900 p-5 ring-1 ring-white/10">
+                <div className="flex items-center justify-between">
+                  <div className="h-3 w-32 rounded bg-white/10" />
+                  <div className="h-8 w-16 rounded-2xl bg-white/10" />
+                </div>
+                <div className="mt-4 h-3 w-full rounded bg-white/10" />
+                <div className="mt-2 h-3 w-5/6 rounded bg-white/10" />
+                <div className="mt-2 h-3 w-2/3 rounded bg-white/10" />
+                <div className="mt-6 h-10 w-full rounded-2xl bg-white/10" />
+              </div>
+            ))}
+          </div>
         </div>
       ) : showEmpty ? (
         <div className="rounded-3xl bg-slate-900 p-12 ring-1 ring-white/10">

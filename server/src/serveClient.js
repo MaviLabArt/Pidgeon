@@ -41,6 +41,31 @@ function safeListDir(dirPath, limit = 20) {
   }
 }
 
+function isSuspiciousPath(urlPath = "") {
+  const p = String(urlPath || "").toLowerCase();
+  if (!p || p === "/") return false;
+  // Very common automated scans against non-WordPress sites.
+  if (p === "/wp-admin" || p.startsWith("/wp-admin/")) return true;
+  if (p === "/wordpress" || p.startsWith("/wordpress/")) return true;
+  if (p.startsWith("/wp-content") || p.startsWith("/wp-includes")) return true;
+  if (p.startsWith("/wp-login")) return true;
+  if (p.startsWith("/xmlrpc")) return true;
+  if (p.startsWith("/phpmyadmin") || p.startsWith("/pma")) return true;
+  if (p.startsWith("/cgi-bin")) return true;
+  // Sensitive dotpaths that should never be served by the SPA.
+  if (p.startsWith("/.env") || p.startsWith("/.git")) return true;
+  return false;
+}
+
+function looksLikeFileRequest(urlPath = "") {
+  const p = String(urlPath || "");
+  if (!p || p === "/") return false;
+  // If the last segment contains a dot, treat it as a file request (e.g. *.php, *.sql, *.bak).
+  // SPA routes shouldn't contain extensions, and this avoids serving index.html to obvious scans.
+  const base = path.posix.basename(p);
+  return base.includes(".");
+}
+
 function logSendFileFailure(req, err, { fallback } = {}) {
   clientSendFileErrorCount += 1;
   const summary = `[client] Failed to serve ${clientIndex}: ${err?.message || err}`;
@@ -138,6 +163,14 @@ export function mountClient(app) {
   // Express 5 + path-to-regexp v6 doesn't accept "*" as a path string.
   // Also avoid swallowing unknown /api routes: let them 404 instead of serving the SPA.
   app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
+    // Don't serve index.html for obvious scans or "file-like" paths.
+    // This reduces noise and makes it clearer in logs when something is truly wrong with the client bundle.
+    const reqPath = req?.path || req?.originalUrl || req?.url || "";
+    if (isSuspiciousPath(reqPath) || looksLikeFileRequest(reqPath)) {
+      res.status(404).end();
+      return;
+    }
+
     res.sendFile(clientIndex, (err) => {
       if (!err) return;
       let fallback = null;

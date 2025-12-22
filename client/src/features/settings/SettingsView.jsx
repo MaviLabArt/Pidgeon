@@ -120,7 +120,7 @@ export function SettingsView({
   );
   const normalizedDvmPubkey = normalizeDvmPubkeyInput(dvmPubkeyOverride);
   const dvmPubkeyLooksValid = !normalizedDvmPubkey || isHexPubkey(normalizedDvmPubkey);
-  const [repairingMailbox, setRepairingMailbox] = React.useState(false);
+  const [repairingMailbox, setRepairingMailbox] = React.useState(""); // "" | "queue" | "full"
 
   return (
     <Card>
@@ -469,33 +469,63 @@ export function SettingsView({
 	                <div className="min-w-0">
 	                  <div className="text-sm font-medium">Repair job ledger</div>
 	                </div>
-	                <Button
-	                  type="button"
-	                  size="sm"
-	                  variant="outline"
-                  loading={repairingMailbox}
-	                  busyText="Requesting…"
-	                  disabled={!pubkey || !onRepairMailbox || repairingMailbox}
-	                  onClick={async () => {
-	                    if (!onRepairMailbox) return;
-	                    const ok = window.confirm(
-	                      "Are you sure? Recommended not to, unless something is broken."
-	                    );
-	                    if (!ok) return;
-	                    setRepairingMailbox(true);
-	                    try {
-	                      await onRepairMailbox({ scope: "queue" });
-	                    } finally {
-	                      setRepairingMailbox(false);
-	                    }
-	                  }}
-	                >
-	                  Repair job ledger
-	                </Button>
+                  <div className="flex flex-wrap gap-2">
+	                  <Button
+	                    type="button"
+	                    size="sm"
+	                    variant="outline"
+                      loading={repairingMailbox === "queue"}
+	                    busyText="Requesting…"
+	                    disabled={!pubkey || !onRepairMailbox || Boolean(repairingMailbox)}
+	                    onClick={async () => {
+	                      if (!onRepairMailbox) return;
+	                      const ok = window.confirm(
+	                        "Repair scheduled jobs only? Recommended not to unless something is broken."
+	                      );
+	                      if (!ok) return;
+	                      setRepairingMailbox("queue");
+	                      try {
+	                        await onRepairMailbox({ scope: "queue" });
+	                      } finally {
+	                        setRepairingMailbox("");
+	                      }
+	                    }}
+	                  >
+	                    Repair queue
+	                  </Button>
+	                  <Button
+	                    type="button"
+	                    size="sm"
+	                    variant="outline"
+                      loading={repairingMailbox === "full"}
+	                    busyText="Requesting…"
+	                    disabled={!pubkey || !onRepairMailbox || Boolean(repairingMailbox)}
+	                    onClick={async () => {
+	                      if (!onRepairMailbox) return;
+	                      const ok = window.confirm(
+	                        "Repair full job ledger (includes posted/history)? Recommended not to unless Posted is stuck."
+	                      );
+	                      if (!ok) return;
+	                      setRepairingMailbox("full");
+	                      try {
+	                        await onRepairMailbox({ scope: "full" });
+	                      } finally {
+	                        setRepairingMailbox("");
+	                      }
+	                    }}
+	                  >
+	                    Repair full
+	                  </Button>
+                  </div>
 	              </div>
 	              {!pubkey ? (
 	                <div className="text-[11px] text-white/50">Connect a signer to request a repair.</div>
               ) : null}
+	              {pubkey ? (
+	                <div className="text-[11px] text-white/50">
+                    Queue repair republishes scheduled jobs; full repair republishes posted/history pages too (use if Posted count is stuck).
+                  </div>
+	              ) : null}
             </div>
           </div>
         </details>
