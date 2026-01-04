@@ -1,4 +1,11 @@
 import net from "net";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { publish, requestOne } from "@welshman/net";
+import { normalizeRelayUrl } from "@welshman/util";
+import { finalizeEvent, getPublicKey, nip04, nip19 } from "nostr-tools";
+
+const NWC_REQUEST_KIND = 23194;
+const NWC_RESPONSE_KIND = 23195;
 
 function isPrivateIp(ip) {
   const addr = String(ip || "").trim();
@@ -51,6 +58,16 @@ function assertSafeHttpUrl(rawUrl, { allowHttp = false } = {}) {
   return url;
 }
 
+function assertSafeRelayUrl(rawUrl) {
+  const url = new URL(rawUrl);
+  if (!(url.protocol === "wss:" || url.protocol === "ws:")) {
+    throw new Error(`Unsupported relay protocol: ${url.protocol}`);
+  }
+  if (url.username || url.password) throw new Error("Relay URL must not contain credentials");
+  // NOTE: This is operator-configured (not user-input), so we allow private hostnames/IPs.
+  return url;
+}
+
 async function fetchJson(url, { timeoutMs = 5000, allowHttp = false, method = "GET" } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), Math.max(1000, Number(timeoutMs) || 5000));
@@ -81,6 +98,177 @@ function parseLud16(lud16) {
   const d = String(domain || "").trim();
   if (!n || !d) return null;
   return { name: n, domain: d };
+}
+
+function normalizeNostrPubkeyHex(input) {
+  let pk = String(input || "").trim();
+  if (!pk) return "";
+  if (pk.startsWith("npub1")) {
+    try {
+      const decoded = nip19.decode(pk);
+      if (decoded.type !== "npub" || !decoded.data) return "";
+      pk = typeof decoded.data === "string" ? decoded.data : bytesToHex(decoded.data);
+    } catch {
+      return "";
+    }
+  }
+  pk = pk.toLowerCase();
+  return /^[a-f0-9]{64}$/.test(pk) ? pk : "";
+}
+
+function parseNostrSecretKey(raw) {
+  const s = String(raw || "").trim();
+  if (!s) throw new Error("Missing NWC secret");
+  if (s.startsWith("nsec1")) {
+    try {
+      const decoded = nip19.decode(s);
+      if (decoded.type !== "nsec" || !decoded.data) throw new Error("Invalid nsec");
+      const hex = bytesToHex(decoded.data);
+      return { hex, bytes: decoded.data };
+    } catch (err) {
+      throw new Error(`Failed to decode NWC secret: ${err?.message || err}`);
+    }
+  }
+  const hex = s.toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(hex)) throw new Error("Invalid NWC secret (expected 64-char hex or nsec)");
+  return { hex, bytes: hexToBytes(hex) };
+}
+
+function parseNwcUrl(input) {
+  const raw = String(input || "").trim();
+  if (!raw) throw new Error("Missing NWC URL");
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("Invalid NWC URL");
+  }
+  if (String(url.protocol || "") !== "nostr+walletconnect:") {
+    throw new Error("Invalid NWC URL protocol (expected nostr+walletconnect://)");
+  }
+  if (url.username || url.password) throw new Error("NWC URL must not contain credentials");
+
+  // `nostr+walletconnect://<wallet-pubkey>` -> hostname is the pubkey.
+  // Some parsers may put it in pathname, so accept either.
+  const walletPubkey =
+    normalizeNostrPubkeyHex(url.hostname) ||
+    normalizeNostrPubkeyHex(String(url.pathname || "").replace(/^\//, ""));
+  if (!walletPubkey) throw new Error("Invalid NWC wallet pubkey");
+
+  const relayRaw = String(url.searchParams.getAll("relay")[0] || url.searchParams.get("relay") || "").trim();
+  if (!relayRaw) throw new Error("Missing NWC relay (relay=...)");
+  const relayNormalized = normalizeRelayUrl(relayRaw);
+  if (!relayNormalized) throw new Error("Invalid NWC relay URL");
+  assertSafeRelayUrl(relayNormalized);
+
+  const secretRaw = String(url.searchParams.get("secret") || "").trim();
+  const secret = parseNostrSecretKey(secretRaw);
+  const clientPubkey = getPublicKey(secret.bytes);
+
+  return {
+    relay: relayNormalized,
+    walletPubkey,
+    clientPubkey,
+    secretHex: secret.hex,
+    secretBytes: secret.bytes
+  };
+}
+
+function pickFirstTagValue(tags, key) {
+  const list = Array.isArray(tags) ? tags : [];
+  const t = list.find((x) => Array.isArray(x) && x[0] === key && typeof x[1] === "string");
+  return String(t?.[1] || "").trim();
+}
+
+async function nwcCall({ nwcUrl, method, params = {}, timeoutMs = 8000 } = {}) {
+  const cfg = parseNwcUrl(nwcUrl);
+  const createdAt = Math.floor(Date.now() / 1000);
+  const timeout = Math.max(1000, Number(timeoutMs) || 8000);
+
+  const methodName = String(method || "").trim();
+  const plaintext = JSON.stringify({
+    method: methodName,
+    params: params && typeof params === "object" ? params : {}
+  });
+
+  const content = await nip04.encrypt(cfg.secretHex, cfg.walletPubkey, plaintext);
+  const draft = {
+    kind: NWC_REQUEST_KIND,
+    created_at: createdAt,
+    tags: [["p", cfg.walletPubkey]],
+    content
+  };
+  const req = finalizeEvent(draft, cfg.secretBytes);
+
+  let matched = null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  let responsePromise;
+  try {
+    responsePromise = requestOne({
+      relay: cfg.relay,
+      filters: [
+        {
+          kinds: [NWC_RESPONSE_KIND],
+          authors: [cfg.walletPubkey],
+          "#p": [cfg.clientPubkey],
+          // Allow for some clock skew between app and wallet.
+          since: Math.max(0, createdAt - 600),
+          limit: 50
+        }
+      ],
+      autoClose: false,
+      signal: ctrl.signal,
+      onEvent: (ev) => {
+        if (!ev || typeof ev !== "object") return;
+        const e = pickFirstTagValue(ev.tags, "e");
+        if (e && e === req.id) {
+          matched = ev;
+          ctrl.abort();
+        }
+      }
+    });
+
+    await publish({ relays: [cfg.relay], event: req });
+    const events = await responsePromise;
+
+    const resEv =
+      matched ||
+      (Array.isArray(events)
+        ? events.find((ev) => pickFirstTagValue(ev?.tags, "e") === req.id)
+        : null);
+    if (!resEv?.content) throw new Error("NWC response timeout");
+
+    const decrypted = await nip04.decrypt(cfg.secretHex, cfg.walletPubkey, String(resEv.content || ""));
+    let body = null;
+    try {
+      body = JSON.parse(decrypted || "{}");
+    } catch {
+      body = null;
+    }
+
+    const resultType = String(body?.result_type || body?.resultType || "").trim();
+    if (resultType && methodName && resultType !== methodName) {
+      throw new Error(`NWC response mismatch (expected ${methodName}, got ${resultType})`);
+    }
+
+    const err = body?.error;
+    if (err) {
+      if (typeof err === "object") {
+        const msg = String(err.message || err.error || err.reason || "NWC error");
+        throw new Error(msg);
+      }
+      throw new Error(String(err));
+    }
+
+    return body?.result;
+  } finally {
+    clearTimeout(timer);
+    ctrl.abort();
+    try {
+      await responsePromise;
+    } catch {}
+  }
 }
 
 export async function createInvoiceViaLnurlVerify({
@@ -152,3 +340,65 @@ export async function verifyInvoiceViaLnurlVerify({ verifyUrl, timeoutMs = 5000,
   };
 }
 
+export async function createInvoiceViaNwc({
+  nwcUrl,
+  sats,
+  comment = "",
+  expirySec = 0,
+  timeoutMs = 8000
+} = {}) {
+  const s = Math.max(0, Math.floor(Number(sats) || 0));
+  if (!(s > 0)) throw new Error("Invoice amount is 0");
+
+  const amountMsat = s * 1000;
+  const memo = String(comment || "").trim();
+  const exp = Math.max(0, Math.floor(Number(expirySec) || 0));
+
+  const result = await nwcCall({
+    nwcUrl,
+    method: "make_invoice",
+    params: {
+      amount: amountMsat,
+      ...(memo ? { description: memo } : {}),
+      ...(exp ? { expiry: exp } : {})
+    },
+    timeoutMs
+  });
+
+  const pr = String(result?.invoice || result?.pr || result?.bolt11 || "").trim();
+  if (!pr) throw new Error("NWC make_invoice did not return an invoice");
+
+  const paymentHash = String(result?.payment_hash || result?.paymentHash || "").trim().toLowerCase();
+  const verifyRef = /^[a-f0-9]{64}$/.test(paymentHash) ? `nwc:hash:${paymentHash}` : "nwc:invoice";
+
+  return { pr, verifyRef, sats: s };
+}
+
+export async function verifyInvoiceViaNwc({ nwcUrl, verifyRef = "", invoice = "", timeoutMs = 8000 } = {}) {
+  const ref = String(verifyRef || "").trim();
+  const pr = String(invoice || "").trim();
+  if (!ref) throw new Error("Missing verify ref");
+  if (!pr) throw new Error("Missing invoice");
+
+  const m = ref.match(/^nwc:hash:([a-f0-9]{64})$/i);
+  const params = m ? { payment_hash: m[1].toLowerCase() } : { invoice: pr };
+
+  const result = await nwcCall({
+    nwcUrl,
+    method: "lookup_invoice",
+    params,
+    timeoutMs
+  });
+
+  const settledAt = Math.max(0, Number(result?.settled_at ?? result?.settledAt ?? 0) || 0);
+  const settled =
+    Boolean(result?.settled) ||
+    Boolean(result?.paid) ||
+    settledAt > 0 ||
+    String(result?.status || "").toLowerCase() === "paid" ||
+    String(result?.status || "").toLowerCase() === "settled";
+
+  const preimage = String(result?.preimage || result?.payment_preimage || result?.paymentPreimage || "").trim();
+  const invoiceOut = String(result?.invoice || result?.pr || pr).trim();
+  return { settled, preimage, pr: invoiceOut };
+}

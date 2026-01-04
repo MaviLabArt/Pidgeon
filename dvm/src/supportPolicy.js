@@ -31,6 +31,12 @@ export function getSupportPolicy() {
     paymentModeRaw === "lnurlverify" ||
     paymentModeRaw === "verify"
       ? "lnurl_verify"
+      : paymentModeRaw === "nwc" ||
+          paymentModeRaw === "nostr_wallet_connect" ||
+          paymentModeRaw === "nostr-wallet-connect" ||
+          paymentModeRaw === "walletconnect" ||
+          paymentModeRaw === "wallet_connect"
+        ? "nwc"
       : "none";
   const invoiceSats = Number.isFinite(invoiceSatsRaw) && invoiceSatsRaw > 0 ? Math.floor(invoiceSatsRaw) : 0;
   const supporterDays =

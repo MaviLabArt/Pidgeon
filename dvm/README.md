@@ -29,6 +29,14 @@ DVM_SUPPORT_PAYMENT_MODE=lnurl_verify
 DVM_SUPPORT_INVOICE_SATS=1000
 DVM_SUPPORT_SUPPORTER_DAYS=30
 DVM_SUPPORT_VERIFY_POLL_SECS=15
+
+# Alternative: verify supporters via Nostr Wallet Connect (NIP-47)
+# DVM_SUPPORT_PAYMENT_MODE=nwc
+# DVM_SUPPORT_NWC_URL=nostr+walletconnect://<wallet-pubkey>?relay=wss://relay.getalby.com/v1&secret=<hex-or-nsec>
+# DVM_SUPPORT_INVOICE_SATS=1000
+# DVM_SUPPORT_SUPPORTER_DAYS=30
+# DVM_SUPPORT_VERIFY_POLL_SECS=15
+# (Make sure the connection allows: make_invoice, lookup_invoice)
 ```
 `DVM_SECRET` can also be a bech32 `nsec` (it will be decoded to hex automatically).
 
@@ -62,7 +70,7 @@ The global job ledger index includes a `support` object with:
 - `policy`: DVM-configured gates (horizon days, gated features) + CTA (lud16/message).
 - `state`: per-user counters and unlock window.
 - `prompt`: either a “nudge” (every `DVM_SUPPORT_WINDOW_SCHEDULES`) or an active gate prompt.
-- `invoice` (optional): when `DVM_SUPPORT_PAYMENT_MODE=lnurl_verify`, the DVM can publish a pending BOLT11 invoice here.
+- `invoice` (optional): when `DVM_SUPPORT_PAYMENT_MODE=lnurl_verify` or `nwc`, the DVM can publish a pending BOLT11 invoice here.
 
 Gates are intentionally “soft”: users always have a “use for free” option which unlocks gates/prompts until the next window.
 
@@ -76,4 +84,3 @@ Gates are intentionally “soft”: users always have a “use for free” optio
 - Job ledger encryption uses symmetric NIP‑44 with deterministic subkeys derived from `kr` (root key).
 - There is no `6905` status traffic; job ledger updates are the single source of truth.
 - DVM relay `#d` indexing is probed on startup and cached with a TTL (env: `DVM_D_INDEX_PROBE_TTL_SEC`) so restarts don’t publish probe events every time.
-

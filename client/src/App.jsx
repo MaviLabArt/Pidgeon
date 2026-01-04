@@ -1435,7 +1435,8 @@ export default function PidgeonUI() {
   }, [supportInvoiceSats, supportDefaultInvoiceSats, supportMinInvoiceSats]);
   const supportInvoice = mailboxSupport?.invoice && typeof mailboxSupport.invoice === "object" ? mailboxSupport.invoice : null;
   const supportHasInvoice = Boolean(supportInvoice?.pr);
-  const supportShowInvoice = supportPayMode === "lnurl_verify" && (supportPayment.active || supportHasInvoice);
+  const supportInvoiceMode = supportPayMode === "lnurl_verify" || supportPayMode === "nwc";
+  const supportShowInvoice = supportInvoiceMode && (supportPayment.active || supportHasInvoice);
 
   const openSupportLink = useCallback(async () => {
     const lud16 = String(mailboxSupport?.policy?.cta?.lud16 || "").trim();
@@ -1476,7 +1477,7 @@ export default function PidgeonUI() {
 
       if (a === "support") {
         const payMode = String(mailboxSupport?.policy?.payment?.mode || "").trim().toLowerCase();
-        if (payMode === "lnurl_verify") {
+        if (payMode === "lnurl_verify" || payMode === "nwc") {
           const pr = String(mailboxSupport?.invoice?.pr || "").trim();
           if (pr) {
             openInvoiceLink(pr);
@@ -4041,7 +4042,7 @@ export default function PidgeonUI() {
               </div>
             ) : null}
 
-            {!supportShowInvoice && supportPayMode === "lnurl_verify" ? (
+            {!supportShowInvoice && supportInvoiceMode ? (
               <div className="space-y-3 rounded-2xl bg-slate-950/50 p-4 ring-1 ring-white/10">
                 <div className="text-xs text-white/60">Amount (sats)</div>
                 <div className="flex flex-wrap items-end justify-between gap-3">
@@ -4074,7 +4075,7 @@ export default function PidgeonUI() {
               </div>
             ) : null}
 
-            {!supportShowInvoice && supportPayMode !== "lnurl_verify" && String(mailboxSupport?.policy?.cta?.lud16 || "").trim() ? (
+            {!supportShowInvoice && !supportInvoiceMode && String(mailboxSupport?.policy?.cta?.lud16 || "").trim() ? (
               <div className="flex items-center justify-between gap-3 rounded-2xl bg-slate-950/50 p-4 ring-1 ring-white/10">
                 <div className="min-w-0">
                   <div className="text-xs text-white/60">Lightning</div>
@@ -4105,7 +4106,7 @@ export default function PidgeonUI() {
             <Button
               onClick={() => handleSupportDialogAction("support")}
             >
-              {supportPayMode === "lnurl_verify"
+              {supportInvoiceMode
                 ? (supportHasInvoice ? "Pay invoice" : "Support")
                 : "Support"}
             </Button>

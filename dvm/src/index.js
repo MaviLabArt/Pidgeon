@@ -43,7 +43,7 @@ import {
   upsertPreviewKeyCapsules
 } from "./appDataDb.js";
 import { getSupportPolicy } from "./supportPolicy.js";
-import { createInvoiceViaLnurlVerify, verifyInvoiceViaLnurlVerify } from "./supportPayments.js";
+import { createInvoiceViaLnurlVerify, createInvoiceViaNwc, verifyInvoiceViaLnurlVerify, verifyInvoiceViaNwc } from "./supportPayments.js";
 import { parseNaturalWhen } from "./naturalWhen.js";
 import crypto from "crypto";
 import net from "net";
@@ -172,7 +172,8 @@ function supportApplySupportClick(state, policy) {
 
 function getSupportPaymentConfig(policy) {
   const payment = policy?.payment && typeof policy.payment === "object" ? policy.payment : {};
-  const mode = String(payment?.mode || "").trim().toLowerCase() === "lnurl_verify" ? "lnurl_verify" : "none";
+  const modeRaw = String(payment?.mode || "").trim().toLowerCase();
+  const mode = modeRaw === "lnurl_verify" ? "lnurl_verify" : modeRaw === "nwc" ? "nwc" : "none";
   const invoiceSats = Math.max(0, Math.floor(Number(payment?.invoiceSats) || 0));
   const minSatsRaw = Math.max(0, Math.floor(Number(payment?.minSats) || 0));
   const minSats = minSatsRaw || invoiceSats || 0;
@@ -196,10 +197,11 @@ async function ensureSupportInvoice({ pubkey, policy, sats = 0 } = {}) {
 
   const pol = policy || getSupportPolicy();
   const payCfg = getSupportPaymentConfig(pol);
-  if (payCfg.mode !== "lnurl_verify") return null;
-
+  if (payCfg.mode !== "lnurl_verify" && payCfg.mode !== "nwc") return null;
   const lud16 = String(pol?.cta?.lud16 || "").trim();
-  if (!lud16) return null;
+  const nwcUrl = String(process.env.DVM_SUPPORT_NWC_URL || "").trim();
+  if (payCfg.mode === "lnurl_verify" && !lud16) return null;
+  if (payCfg.mode === "nwc" && !nwcUrl) return null;
 
   const HARD_MAX_SATS = 10_000_000; // 0.1 BTC safety cap (can be made configurable if needed)
   const requested = Math.max(0, Math.floor(Number(sats) || 0));
@@ -225,20 +227,29 @@ async function ensureSupportInvoice({ pubkey, policy, sats = 0 } = {}) {
   const expiresAt = payCfg.invoiceTtlSec > 0 ? createdAt + payCfg.invoiceTtlSec : 0;
   const comment = String(process.env.DVM_SUPPORT_INVOICE_COMMENT || process.env.DVM_SUPPORT_MESSAGE || "Support").trim();
 
-  const invoice = await createInvoiceViaLnurlVerify({
-    lud16,
-    sats: satsWanted,
-    comment,
-    timeoutMs: payCfg.verifyTimeoutMs,
-    allowHttp: Boolean(LOADTEST_MODE)
-  });
+  const invoice =
+    payCfg.mode === "nwc"
+      ? await createInvoiceViaNwc({
+          nwcUrl,
+          sats: satsWanted,
+          comment,
+          expirySec: payCfg.invoiceTtlSec,
+          timeoutMs: payCfg.verifyTimeoutMs
+        })
+      : await createInvoiceViaLnurlVerify({
+          lud16,
+          sats: satsWanted,
+          comment,
+          timeoutMs: payCfg.verifyTimeoutMs,
+          allowHttp: Boolean(LOADTEST_MODE)
+        });
 
   const id = crypto.randomBytes(16).toString("hex");
   const inserted = insertSupportInvoice({
     id,
     pubkey: pk,
     pr: invoice.pr,
-    verifyUrl: invoice.verifyUrl,
+    verifyUrl: payCfg.mode === "nwc" ? String(invoice.verifyRef || "nwc:invoice") : invoice.verifyUrl,
     sats: invoice.sats,
     status: "pending",
     createdAt,
@@ -254,7 +265,7 @@ async function checkSupportInvoice({ pubkey, invoiceId = "", policy, force = fal
 
   const pol = policy || getSupportPolicy();
   const payCfg = getSupportPaymentConfig(pol);
-  if (payCfg.mode !== "lnurl_verify") return null;
+  if (payCfg.mode !== "lnurl_verify" && payCfg.mode !== "nwc") return null;
 
   const id = String(invoiceId || "").trim();
   const inv = id ? getSupportInvoiceById(pk, id) : getSupportActiveInvoice(pk);
@@ -275,11 +286,21 @@ async function checkSupportInvoice({ pubkey, invoiceId = "", policy, force = fal
   }
 
   try {
-    const result = await verifyInvoiceViaLnurlVerify({
-      verifyUrl: inv.verifyUrl,
-      timeoutMs: payCfg.verifyTimeoutMs,
-      allowHttp: Boolean(LOADTEST_MODE)
-    });
+    const verifyRef = String(inv.verifyUrl || "").trim();
+    const isNwcRef = verifyRef.toLowerCase().startsWith("nwc:");
+    const nwcUrl = String(process.env.DVM_SUPPORT_NWC_URL || "").trim();
+    const result = isNwcRef
+      ? await verifyInvoiceViaNwc({
+          nwcUrl,
+          verifyRef,
+          invoice: inv.pr,
+          timeoutMs: payCfg.verifyTimeoutMs
+        })
+      : await verifyInvoiceViaLnurlVerify({
+          verifyUrl: verifyRef,
+          timeoutMs: payCfg.verifyTimeoutMs,
+          allowHttp: Boolean(LOADTEST_MODE)
+        });
 
     if (result.settled) {
       const updated = updateSupportInvoice(pk, inv.id, {
@@ -316,7 +337,7 @@ async function checkSupportInvoice({ pubkey, invoiceId = "", policy, force = fal
 async function pollSupportInvoicesOnce({ policy } = {}) {
   const pol = policy || getSupportPolicy();
   const payCfg = getSupportPaymentConfig(pol);
-  if (payCfg.mode !== "lnurl_verify") return;
+  if (payCfg.mode !== "lnurl_verify" && payCfg.mode !== "nwc") return;
   if (!(payCfg.verifyPollSec > 0)) return;
 
   const ts = now();
@@ -2071,11 +2092,11 @@ call(async function main() {
     }
   });
 
-  // Optional: poll pending LNURL-verify invoices and upgrade users to supporters when settled.
+  // Optional: poll pending invoices and upgrade users to supporters when settled.
   try {
     const supportPolicy = getSupportPolicy();
     const payCfg = getSupportPaymentConfig(supportPolicy);
-    if (payCfg.mode === "lnurl_verify" && payCfg.verifyPollSec > 0) {
+    if ((payCfg.mode === "lnurl_verify" || payCfg.mode === "nwc") && payCfg.verifyPollSec > 0) {
       const intervalMs = payCfg.verifyPollSec * 1000;
       const tick = () =>
         pollSupportInvoicesOnce({ policy: supportPolicy }).catch((err) => {
@@ -2084,7 +2105,7 @@ call(async function main() {
       tick();
       supportVerifyTimer = setInterval(tick, intervalMs);
       supportVerifyTimer.unref?.();
-      vLog(`[support] LNURL-verify polling enabled (every ${payCfg.verifyPollSec}s)`);
+      vLog(`[support] invoice polling enabled (mode=${payCfg.mode}, every ${payCfg.verifyPollSec}s)`);
     }
   } catch (err) {
     console.warn("[support] failed to start invoice poller:", err?.message || err);

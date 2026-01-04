@@ -66,6 +66,19 @@ function looksLikeFileRequest(urlPath = "") {
   return base.includes(".");
 }
 
+function getClientIp(req) {
+  const headers = req?.headers || {};
+  const xff = String(headers["x-forwarded-for"] || "")
+    .split(",")[0]
+    .trim();
+  const realIp = String(headers["x-real-ip"] || "").trim();
+  const cfConnectingIp = String(headers["cf-connecting-ip"] || "").trim();
+  const reqIp = String(req?.ip || "").trim();
+  const remoteAddress = String(req?.socket?.remoteAddress || req?.connection?.remoteAddress || "").trim();
+  const ip = cfConnectingIp || realIp || xff || reqIp || remoteAddress;
+  return { ip, reqIp, xff, realIp, cfConnectingIp, remoteAddress };
+}
+
 function logSendFileFailure(req, err, { fallback } = {}) {
   clientSendFileErrorCount += 1;
   const summary = `[client] Failed to serve ${clientIndex}: ${err?.message || err}`;
@@ -84,6 +97,7 @@ function logSendFileFailure(req, err, { fallback } = {}) {
       url: req?.originalUrl || req?.url,
       accept: req?.headers?.accept,
       userAgent: req?.headers?.["user-agent"],
+      ip: getClientIp(req),
     },
     client: {
       envClientDist: process.env.CLIENT_DIST || "",
@@ -184,8 +198,9 @@ export function mountClient(app) {
           fallback = { served: false, error: readErr?.code || readErr?.message || String(readErr) };
         }
       }
-      logSendFileFailure(req, err, { fallback });
+      // If we successfully served the SPA fallback, don't warn (usually: bot scans or during deploy/build).
       if (fallback?.served) return;
+      logSendFileFailure(req, err, { fallback });
       if (!res.headersSent) res.status(err?.statusCode || 404).end();
     });
   });
