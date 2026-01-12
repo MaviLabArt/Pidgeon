@@ -14,7 +14,7 @@
     "@welshman/net": "^0.7.1",
     "@welshman/signer": "^0.5.1",
     "@welshman/util": "^0.7.1",
-    "better-sqlite3": "^12.5.0",
+    "better-sqlite3": "^12.6.0",
     "dotenv": "^17.2.3",
     "nostr-tools": "^2.19.2"
   }
