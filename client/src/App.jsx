@@ -2726,13 +2726,24 @@ export default function PidgeonUI() {
       }
       const baseEvent = job.noteEvent
         ? { ...job.noteEvent, id: undefined, sig: undefined }
-        : buildDraftEvent({
-            content: job.content,
-            manualTags: job.tags,
-            uploadTags: [],
-            addClientTag: true,
-            nsfw: false,
-          });
+        : (() => {
+            const rawTags = Array.isArray(job?.tags) ? job.tags : null;
+            if (rawTags && rawTags.length) {
+              return {
+                kind: 1,
+                content: String(job?.content || ""),
+                tags: rawTags.map((t) => (Array.isArray(t) ? [...t] : t)),
+                created_at: Math.floor(Date.now() / 1000),
+              };
+            }
+            return buildDraftEvent({
+              content: job.content,
+              manualTags: typeof job?.tags === "string" ? job.tags : "",
+              uploadTags: [],
+              addClientTag: true,
+              nsfw: false,
+            });
+          })();
       baseEvent.created_at = scheduledAtSec;
       baseEvent.pubkey = pubkey;
       const signedNote = await window.nostr.signEvent(baseEvent);
