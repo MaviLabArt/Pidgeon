@@ -73,6 +73,32 @@ function shortHex(id = "") {
   return `${hex.slice(0, 8)}…${hex.slice(-4)}`;
 }
 
+function isImageUrl(raw = "") {
+  const url = String(raw || "").trim();
+  if (!url) return false;
+  if (!/^https?:\/\//i.test(url)) return false;
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.toLowerCase();
+    const host = parsed.hostname.toLowerCase();
+    if (host === "picsum.photos" || host.endsWith(".picsum.photos")) return true;
+    return /\.(png|jpe?g|gif|webp|avif)$/.test(path);
+  } catch {
+    return /\.(png|jpe?g|gif|webp|avif)(?:$|[?#])/i.test(url);
+  }
+}
+
+function isMediaOnlyImageContent(text = "") {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return false;
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return false;
+  for (const token of tokens) {
+    if (!isImageUrl(token)) return false;
+  }
+  return true;
+}
+
 function extractTag(tags, name) {
   return (Array.isArray(tags) ? tags : []).find((t) => Array.isArray(t) && t[0] === name);
 }
@@ -97,6 +123,7 @@ function buildRepostPreviewContent(note) {
     }
   }
   if (snippet) {
+    if (isMediaOnlyImageContent(snippet)) return snippet;
     const compact = snippet.replace(/\s+/g, " ");
     snippet = compact.length > 180 ? `${compact.slice(0, 180)}…` : compact;
   }

@@ -2070,6 +2070,17 @@ export default function PidgeonUI() {
     return `${hex.slice(0, 8)}…${hex.slice(-4)}`;
   }
 
+  function isMediaOnlyImageContent(text = "") {
+    const trimmed = String(text || "").trim();
+    if (!trimmed) return false;
+    const tokens = trimmed.split(/\s+/).filter(Boolean);
+    if (!tokens.length) return false;
+    for (const token of tokens) {
+      if (!isImageUrl(token)) return false;
+    }
+    return true;
+  }
+
   async function normalizeNoteIdInput(input) {
     const raw = String(input || "").trim().replace(/^nostr:/i, "");
     if (!raw) return "";
@@ -2308,13 +2319,17 @@ export default function PidgeonUI() {
       }
       if (isDemo) {
         const requestId = `demo-${signed.id}`;
-        const snippet = strictOk ? String(resolved?.content || "").trim().replace(/\s+/g, " ").slice(0, 180) : "";
+        const resolvedContent = strictOk ? String(resolved?.content || "") : "";
+        const mediaOnly = repostMode !== "quote" && isMediaOnlyImageContent(resolvedContent);
+        const snippet = strictOk ? String(resolvedContent).trim().replace(/\s+/g, " ").slice(0, 180) : "";
         const preview =
           repostMode === "quote"
             ? (String(repostQuoteText || "").trim() || `Quote ${shortHexId(targetId) || ""}`.trim())
-            : (snippet
-                ? `${snippet}${snippet.length === 180 ? "…" : ""}`
-                : `Repost ${shortHexId(targetId) || ""} (demo)`.trim());
+            : (mediaOnly
+                ? String(resolvedContent).trim()
+                : (snippet
+                    ? `${snippet}${snippet.length === 180 ? "…" : ""}`
+                    : `Repost ${shortHexId(targetId) || ""} (demo)`.trim()));
 
         const j = {
           id: requestId,
@@ -2359,13 +2374,17 @@ export default function PidgeonUI() {
       setRepostSchedulingStep("Publishing request…");
       await publishScheduleRequest({ requestEvent: scheduleRequest, dvmRelays: dvm.relays });
 
-      const snippet = strictOk ? String(resolved?.content || "").trim().replace(/\s+/g, " ").slice(0, 180) : "";
+      const resolvedContent = strictOk ? String(resolved?.content || "") : "";
+      const mediaOnly = repostMode !== "quote" && isMediaOnlyImageContent(resolvedContent);
+      const snippet = strictOk ? String(resolvedContent).trim().replace(/\s+/g, " ").slice(0, 180) : "";
       const preview =
         repostMode === "quote"
           ? (String(repostQuoteText || "").trim() || `Quote ${shortHexId(targetId) || ""}`.trim())
-          : (snippet
-              ? `${snippet}${snippet.length === 180 ? "…" : ""}`
-              : `Repost ${shortHexId(targetId) || ""}${strictOk ? "" : " (unresolved)"}`.trim());
+          : (mediaOnly
+              ? String(resolvedContent).trim()
+              : (snippet
+                  ? `${snippet}${snippet.length === 180 ? "…" : ""}`
+                  : `Repost ${shortHexId(targetId) || ""}${strictOk ? "" : " (unresolved)"}`.trim()));
 
       const j = {
         id: requestId,
